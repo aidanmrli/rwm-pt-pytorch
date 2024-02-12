@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import t
+from scipy.stats import beta as beta_dist
 
 
 def target_distribution(x, f):
@@ -81,17 +81,23 @@ def trace_plot(sampling, dimension):
                 lst.append(sampling[j][i])
             plt.plot(lst)
             plt.xlabel("Iteration")
-            plt.title(f"Trace Plot for {i+1}th coordinates")
+            plt.title(f"Trace Plot for {i + 1}th coordinates")
             plt.show()
 
 
 def target_distrn_1_dim(x):
     # for each single element, and assume iid
-    # normal distribution for each element
-    target = 1 / (2 * np.pi) * np.exp(-1 / 2 * (x ** 2))
 
-    # target = 0.5 * (1 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * (x - 2)**2) + \
-    #          0.5 * (1 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * (x + 2)**2)
+    # normal distribution for each element
+    target = 1 / np.sqrt(2 * np.pi) * np.exp(-0.5 * (x ** 2))
+
+    # multi gaussian
+    # target = 0.5 * (1 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * (x - 6)**2) + \
+    #          0.5 * (1 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * (x + 2)**2) + \
+    #          3*(0.5 * (1 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * (x + 7)**2))
+
+    # beta
+    # target = beta_dist.pdf(x, 2, 5)
     return target
 
 
@@ -110,42 +116,43 @@ rate = [0.01, 0.05, 0.1, 0.23, 0.4, 0.5, 0.7, 1, 2, 4, 4.6, 5]
 
 lst_jump = []
 dimension = 1
-number_iter = 1000
+number_iter = 4000
 
-for i in rate:
-    # 1 dimension, dimension = 1
-    samples, esjd = metropolis_algorithm(dimension, target_distrn_1_dim,
-                                         'multivariate', number_iter, 0.23)
-    plt.ylabel(f"x with proposed variance {0.23}")
-    #trace_plot(samples, dimension)
-    #lst_jump.append(esjd)
-    plt.figure(figsize=(10, 6))
-    x = np.linspace(-5, 5, 1000)
-    histogram_lst = []
-    for num in x:
-        histogram_lst.append(target_distribution(num, target_distrn_1_dim))
-    plt.plot(x, histogram_lst, label='Target Distribution', linewidth=2)
-    plt.hist(samples, bins=50, density=True, alpha=0.7, label='Generated Samples')
-    plt.title('Metropolis-Hastings Algorithm')
-    plt.xlabel('Samples')
-    plt.ylabel('Density')
-    plt.show()
-
-plt.plot(rate, lst_jump)
-plt.xlabel('proposed variance')
-plt.ylabel('ESJD')
-plt.show()
-
-# dimension = 10
 # for i in rate:
-#     # high dimension, dimension = 10
+#     # 1 dimension, dimension = 1
 #     samples, esjd = metropolis_algorithm(dimension, target_distrn_1_dim,
-#                                           'multivariate', number_iter, i)
-#     # plt.ylabel(f"x with proposed variance {i}")
-#     # trace_plot(samples, dimension)
+#                                          'multivariate', number_iter, i)
+#     plt.ylabel(f"x with proposed variance {i}")
+#     trace_plot(samples, dimension)
 #     lst_jump.append(esjd)
+#     plt.figure(figsize=(10, 6))
+#     x = np.linspace(-5, 5, 5000)
+#     histogram_lst = []
+#     for num in x:
+#         histogram_lst.append(target_distribution(num, target_distrn_1_dim))
+#     plt.plot(x, histogram_lst, label='Target Distribution', linewidth=2)
+#     plt.hist(samples, bins=50, density=True, alpha=0.7,
+#              label='Generated Samples')
+#     plt.title(f'Metropolis Algorithm x with proposed variance {i}')
+#     plt.xlabel('Samples')
+#     plt.ylabel('Density')
+#     plt.show()
 #
 # plt.plot(rate, lst_jump)
 # plt.xlabel('proposed variance')
 # plt.ylabel('ESJD')
 # plt.show()
+
+dimension = 3
+for i in rate:
+    # high dimension, dimension = 10
+    samples, esjd = metropolis_algorithm(dimension, target_distrn_1_dim,
+                                         'multivariate', number_iter, i)
+    plt.ylabel(f"x with proposed variance {i}")
+    trace_plot(samples, dimension)
+    lst_jump.append(esjd)
+
+plt.plot(rate, lst_jump)
+plt.xlabel('proposed variance')
+plt.ylabel('ESJD')
+plt.show()
