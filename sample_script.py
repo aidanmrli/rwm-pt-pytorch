@@ -14,5 +14,7 @@ if __name__ == "__main__":
                             seed=42)
 
     chain = simulation.generate_samples()
+    print(f"Acceptance rate: {simulation.acceptance_rate():.2f}")
+    print(f"Expected squared jump distance: {simulation.expected_squared_jump_distance():.2f}")
     simulation.traceplot()
     simulation.autocorrelation_plot()
