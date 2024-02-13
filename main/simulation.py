@@ -101,7 +101,7 @@ class MCMCSimulation:
 
         # Generate values for plotting the target density
         x = np.linspace(np.min(samples), np.max(samples), 1000)
-        y = target_density()
+        y = target_density(x)
 
         plt.plot(x, y, color='red', linestyle='--', linewidth=2, label='Target Density')
         plt.xlabel('Value')
