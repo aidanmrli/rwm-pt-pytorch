@@ -7,10 +7,10 @@ from target_distributions import *
 if __name__ == "__main__":
     dim = 50    # dimension of the target and proposal distributions
     simulation = MCMCSimulation(dim=dim, 
-                            sigma=((2.75 ** 2) / (dim ** (1))),  # 2.38**2 / dim
-                            num_iterations=20000,
+                            sigma=((4 ** 2) / (dim ** (1))),  # 2.38**2 / dim
+                            num_iterations=100000,
                             algorithm=RandomWalkMH,
-                            target_dist=MultimodalDensity(dim, scaling=False),
+                            target_dist=MultimodalDensity(dim, scaling=True),  # scaling=True for random scaling factors for the components
                             symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution
                             seed=42)
 
