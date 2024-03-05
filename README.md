@@ -8,7 +8,7 @@ Run experiment.py (in the root directory). Adjust the simulation arguments as ne
 - number of iterations
 - choice of algorithm
 - target distribution
-- symmetry of the distribution
+- symmetry of the proposal distribution (Metropolis vs Metropolis-Hastings)
 - numpy seed
 
 The MCMCSimulation class can generate visualizations such as a histogram in a single dimension, and the traceplot of the Markov chain in a single dimension (or all dimensions).
