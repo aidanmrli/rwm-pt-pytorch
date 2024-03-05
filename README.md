@@ -2,7 +2,7 @@
 A modular high-level library to run high-dimensional Monte Carlo algorithms (e.g. Metropolis algorithm) simulations across a variety of scaling and annealing conditions.
 
 ## To run a single experiment:
-Go to experiment.py (in the root directory). Adjust the simulation arguments as necessary: 
+Run experiment.py (in the root directory). Adjust the simulation arguments as necessary before the experiment: 
 - change the dimension of the target and proposal distributions
 - proposal variance (sigma)
 - number of iterations
@@ -11,7 +11,7 @@ Go to experiment.py (in the root directory). Adjust the simulation arguments as 
 - symmetry of the distribution
 - numpy seed
 
-The simulation class is able to generate visualizations such as a histogram in a single dimension, and the traceplot of a single dimension (or all dimensions).
+The MCMCSimulation class can generate visualizations such as a histogram in a single dimension, and the traceplot of the Markov chain in a single dimension (or all dimensions).
 
 ## Directory Structure
 General classes with their attributes and methods are in the main folder. 
