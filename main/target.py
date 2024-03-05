@@ -1,5 +1,5 @@
 class TargetDistribution:
-    """General class for target distributions."""
+    """General interface for target distributions."""
 
     def __init__(self, dimension):
         self.dim = dimension

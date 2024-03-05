@@ -6,6 +6,8 @@ from algorithms import *
 from typing import Optional, Callable
 
 class MCMCSimulation:
+    """Class for running a single MCMC simulation for generating samples from a target distribution 
+    and visualizing the various metrics and results."""
     def __init__(self, 
                  dim: int, 
                  sigma: float, 
