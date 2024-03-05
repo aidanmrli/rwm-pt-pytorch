@@ -107,7 +107,7 @@ class MCMCSimulation:
         plt.hist(samples, bins=num_bins, density=True, alpha=0.5, label='Samples')
 
         # Generate values for plotting the target density
-        x = np.array([np.array([v]) for v in np.linspace(-15, 15, 1000)])
+        x = np.array([np.array([v]) for v in np.linspace(min(-15, min(samples) - 5), max(15, max(samples) + 5), 1000)])
         y = np.zeros_like(x)
 
         for i in range(len(x)):
