@@ -1,7 +1,7 @@
 # montecarlo
 A modular high-level library to run high-dimensional Monte Carlo algorithms (e.g. Metropolis algorithm) simulations across a variety of scaling and annealing conditions.
 
-## To run an experiment:
+## To run a single experiment:
 Go to experiment.py (in the root directory). Adjust the simulation arguments as necessary: 
 - change the dimension of the target and proposal distributions
 - proposal variance (sigma)
