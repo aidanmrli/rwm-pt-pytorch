@@ -7,7 +7,7 @@ class MultimodalDensity(TargetDistribution):
     def __init__(self, dimension, scaling=False):
         super().__init__(dimension)
         if scaling:
-            self.scaling_factors = np.random.uniform(0, 2, self.dim)    # Randomly sample scaling factors, must have mean 1
+            self.scaling_factors = np.random.uniform(0.000001, 2, self.dim)    # Randomly sample scaling factors, must have mean 1
     
     def density_1d(self, x):
         """Compute the density of a multimodal 1D distribution with three modes."""
