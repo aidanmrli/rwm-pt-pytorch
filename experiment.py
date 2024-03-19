@@ -13,7 +13,7 @@ if __name__ == "__main__":
     dim = 20    # dimension of the target and proposal distributions
     simulation = MCMCSimulation(dim=dim, 
                             sigma=((2.38 ** 2) / (dim ** (1))),  # 2.38**2 / dim
-                            num_iterations=1000000,
+                            num_iterations=1000,
                             algorithm=RandomWalkMH,
                             target_dist=MultimodalDensity(dim, scaling=False),  # scaling=True for random scaling factors for the components
                             symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution
