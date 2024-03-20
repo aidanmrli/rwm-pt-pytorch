@@ -65,7 +65,7 @@ class ParallelTemperingRWM(MHAlgorithm):
                 for chain, beta in chains:
                     for _ in range(200):
                         proposed_state = np.random.multivariate_normal(chain[-1], np.eye(self.dim) * (self.var / beta))
-                        log_accept_ratio = self.log_accept_prob(proposed_state, chain[-1])
+                        log_accept_ratio = self.log_accept_prob(proposed_state, chain[-1], beta)
 
                         # accept the proposed state with probability min(1, A)
                         if log_accept_ratio > 0 or np.random.random() < np.exp(log_accept_ratio):
@@ -135,7 +135,7 @@ class ParallelTemperingRWM(MHAlgorithm):
                     curr_chain.append(curr_chain[-1])
 
 
-    def log_accept_prob(self, proposed_state, current_state):
+    def log_accept_prob(self, proposed_state, current_state, beta):
         """Calculate the log acceptance probability for the proposed state given the current state.
         We use the log density of the target distribution for numerical stability in high dimensions.
 
@@ -147,7 +147,7 @@ class ParallelTemperingRWM(MHAlgorithm):
         Returns:
             float: The log acceptance probability."""
         if self.symmetric:
-            return np.log(self.target_dist(proposed_state)) - np.log(self.target_dist(current_state))
+            return beta * (np.log(self.target_dist(proposed_state)) - np.log(self.target_dist(current_state)))
         else:
             log_target_term = np.log(self.target_dist(proposed_state)) - np.log(self.target_dist(current_state))
             log_proposal_term = (np.log(normal.pdf(current_state, mean=proposed_state, 
@@ -155,4 +155,4 @@ class ParallelTemperingRWM(MHAlgorithm):
                                 - np.log(normal.pdf(proposed_state, mean=current_state, 
                                                     cov=np.eye(self.dim) * (self.var))))
 
-            return log_target_term + log_proposal_term
+            return (log_target_term + log_proposal_term) * beta
