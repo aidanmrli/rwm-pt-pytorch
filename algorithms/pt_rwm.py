@@ -12,7 +12,7 @@ class ParallelTemperingRWM(MHAlgorithm):
             target_dist: Callable = None, 
             symmetric=True,
             temp_ladder=None,
-            geom_temp_spacing=True
+            geom_temp_spacing=False
             ):
         super().__init__(dim, var, target_dist, symmetric)
         self.num_swap_attempts = 0
@@ -24,24 +24,73 @@ class ParallelTemperingRWM(MHAlgorithm):
             self.temp_ladder = []
             if geom_temp_spacing:
                 # construct a geometrically spaced temperature ladder
-                if geom_temp_spacing:
-                    beta_0, beta_min = 1, 1e-2
-                    curr_beta = beta_0
-                    c = 0.5     # set the geometric spacing constant
-                    while curr_beta > beta_min:
-                        self.temp_ladder.append(curr_beta)
-                        self.chains.append(self.chain.copy())  # initialize one chain for each temperature
-                        curr_beta = curr_beta * c
-                    
-                    self.temp_ladder.append(beta_min)
-                    self.chains.append(self.chain.copy())
+                beta_0, beta_min = 1, 1e-2
+                curr_beta = beta_0
+                c = 0.5     # set the geometric spacing constant
+                while curr_beta > beta_min:
+                    self.temp_ladder.append(curr_beta)
+                    self.chains.append(self.chain.copy())  # initialize one chain for each temperature
+                    curr_beta = curr_beta * c
+                
+                self.temp_ladder.append(beta_min)
+                self.chains.append(self.chain.copy())
 
                 # iteratively construct the inverse temperatures using simulation-based approach
-                else:
-                    # TODO: implement the simulation-based approach to construct spacing of prob 0.23
-                    # also consider adaptive temperature ladder
-                    pass
+            else:
+                # TODO: implement the simulation-based approach to construct spacing of prob 0.23
+                # also consider adaptive temperature ladder
+                self.construct_temp_ladder_iteratively()
+                    
         self.chain = self.chains[0]  # the first chain is the "cold" chain
+
+
+    def construct_temp_ladder_iteratively(self):
+        """Construct the temperature ladder iteratively using a simulation-based approach."""
+        beta_0, beta_min = 1, 1e-2
+        curr_beta = beta_0
+
+        while curr_beta > beta_min:
+            self.temp_ladder.append(curr_beta)
+            self.chains.append(self.chain.copy())  # initialize one chain for each temperature
+
+            # Find the next inverse temperature beta
+            new_beta = curr_beta * 0.75
+
+            while True:
+                curr_beta_chain = self.chain.copy()
+                new_beta_chain = self.chain.copy()
+                chains = [(curr_beta_chain, curr_beta), (new_beta_chain, new_beta)]
+
+                # run simulations for each chain
+                for chain, beta in chains:
+                    for _ in range(200):
+                        proposed_state = np.random.multivariate_normal(chain[-1], np.eye(self.dim) * (self.var / beta))
+                        log_accept_ratio = self.log_accept_prob(proposed_state, chain[-1])
+
+                        # accept the proposed state with probability min(1, A)
+                        if log_accept_ratio > 0 or np.random.random() < np.exp(log_accept_ratio):
+                            chain.append(proposed_state)
+                        else:
+                            chain.append(chain[-1])
+                
+                # then calculate the swap probability between these chains
+                log_swap_prob = (
+                    curr_beta * np.log(self.target_dist(new_beta_chain[-1])) + 
+                    new_beta * np.log(self.target_dist(curr_beta_chain[-1])) -
+                    curr_beta * np.log(self.target_dist(curr_beta_chain[-1])) -
+                    new_beta * np.log(self.target_dist(new_beta_chain[-1]))
+                    )
+                swap_prob = min(1, np.exp(log_swap_prob))
+
+                if 0.22 < swap_prob < 0.24:
+                    curr_beta = new_beta
+                    break
+                else:   # use the recurrence defined in the paper
+                    new_beta = new_beta - (swap_prob - 0.23) / 100
+                    print(swap_prob, new_beta)
+        
+        self.temp_ladder.append(beta_min)
+        self.chains.append(self.chain.copy())
 
 
     def attempt_swap(self, j, k):
