@@ -16,7 +16,7 @@ class MultivariateNormal(TargetDistribution):
             mean (np.ndarray): Mean vector of the distribution.
             cov (np.ndarray): Covariance matrix of the distribution.
         """
-        super().__init__(mean.shape[0])  # Dimension based on mean vector size
+        super().__init__(dim)  # Dimension based on mean vector size
         if mean is None:
             mean = np.zeros(dim)
         if cov is None:
