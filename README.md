@@ -18,12 +18,13 @@ You might want to run many simulations while changing the variance across each s
 Run experiment_many.py (in the root directory). Adjust the simulation arguments as necessary before the experiment: 
 - change the dimension of the target and proposal distributions
 - proposal variance (sigma)
-- number of iterations
+- number of iterations per experiment
 - choice of algorithm
 - target distribution
 - symmetry of the proposal distribution (Metropolis vs Metropolis-Hastings)
 - numpy seed
 
+This file comes with line graphs for ESJD vs acceptance rate, acceptance rate vs proposal variance, and ESJD vs proposal variance.
 
 ## Directory Structure
 General classes with their attributes and methods are in the main folder. 
