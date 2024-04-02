@@ -4,6 +4,7 @@ from .metropolis import MHAlgorithm
 from .target import TargetDistribution
 from algorithms import *
 from typing import Optional, Callable
+import tqdm
 
 class MCMCSimulation:
     """Class for running a single MCMC simulation for generating samples from a target distribution 
@@ -33,11 +34,15 @@ class MCMCSimulation:
     def generate_samples(self):
         if self.has_run():
             raise ValueError("Please reset the algorithm before running it again.")
-        for i in range(self.num_iterations):
-            if i % 20 == 0 and type(self.algorithm) is ParallelTemperingRWM:
-                self.algorithm.step(swap=True)
-                continue
-            self.algorithm.step()
+        
+        print("Running the MCMC simulation...")
+        with tqdm.tqdm(total=self.num_iterations, desc="Running MCMC", unit="iteration") as pbar:
+            for i in range(self.num_iterations):
+                if i % 20 == 0 and type(self.algorithm) is ParallelTemperingRWM:
+                    self.algorithm.step(swap=True)
+                    continue
+                self.algorithm.step()
+                pbar.update(1)
 
         return self.algorithm.chain
     
@@ -114,12 +119,12 @@ class MCMCSimulation:
         x = np.array([np.array([v]) for v in np.linspace(min(-20, min(samples) - 5), max(20, max(samples) + 5), 1000)])
         y = np.zeros_like(x)
 
-        for i in range(len(x)):
-            y[i] = self.target_dist.density(x[i])   # how to visualize a single component of the target density?
+        # for i in range(len(x)):
+        #     y[i] = self.target_dist.density(x[i])   # how to visualize a single component of the target density?
 
-        plt.plot(x, y, color='red', linestyle='--', linewidth=2, label='Target Density')
+        # plt.plot(x, y, color='red', linestyle='--', linewidth=2, label='Target Density')
         plt.xlabel('Value')
         plt.ylabel('Density')
         plt.legend()
-        plt.title(f'variance = {self.algorithm.var:.3f}, acceptance rate = {self.acceptance_rate():.3f}, ESJD = {self.expected_squared_jump_distance():.3f}')
+        plt.title(f'var = {self.algorithm.var:.3f}, a = {self.acceptance_rate():.3f}, ESJD = {self.expected_squared_jump_distance():.3f}, num_iter = {self.num_iterations}')
         plt.show()
