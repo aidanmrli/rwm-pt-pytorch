@@ -35,7 +35,7 @@ class MultivariateNormal(TargetDistribution):
         Returns:
             float: The value of the PDF at the point x.
         """
-        return norm.pdf(x, loc=self.mean, scale=np.sqrt(self.cov))
+        return norm.pdf(x, loc=self.mean[0], scale=np.sqrt(self.cov[0][0]))
     
     def density(self, x):
         """
@@ -47,7 +47,7 @@ class MultivariateNormal(TargetDistribution):
         Returns:
             float: The value of the PDF at the point x.
         """
-        if x is float or len(x) == 1:
+        if isinstance(x, (int, float)) or len(x) == 1:
             return self.density_1d(x)
         # x_centered = x - self.mean
         # inv_cov = np.linalg.inv(self.cov)
