@@ -54,44 +54,72 @@ class ParallelTemperingRWM(MHAlgorithm):
             self.chains.append(self.chain.copy())  # initialize one chain for each temperature
 
             # Find the next inverse temperature beta
-            new_beta = curr_beta * 0.75
+            rho_n = 0
+            new_beta = curr_beta / (1 + np.exp(rho_n))
+            num_iters = 0
 
-            while True:
+            while new_beta > beta_min:
+                num_iters += 1
                 curr_beta_chain = self.chain.copy()
                 new_beta_chain = self.chain.copy()
                 chains = [(curr_beta_chain, curr_beta), (new_beta_chain, new_beta)]
 
-                # run simulations for each chain
+                # get an average swap probability between the two chains by drawing 100 samples
+                # and calculating the swap probability for each sample
+
+                # draw samples from each of the target distributions of the curr_beta and new_beta chains
+                burn_in = 0
+                total_iterations = 100
+                total_samples = total_iterations - burn_in
                 for chain, beta in chains:
-                    for _ in range(200):
-                        proposed_state = np.random.multivariate_normal(chain[-1], np.eye(self.dim) * (self.var / beta))
-                        log_accept_ratio = self.log_accept_prob(proposed_state, chain[-1], beta)
+                    for _ in range(total_iterations):
+                        means = [np.zeros(self.dim), np.zeros(self.dim), np.zeros(self.dim)]
+                        means[0][0], means[2][0] = -5, 5
 
-                        # accept the proposed state with probability min(1, A)
-                        if log_accept_ratio > 0 or np.random.random() < np.exp(log_accept_ratio):
-                            chain.append(proposed_state)
-                        else:
-                            chain.append(chain[-1])
+                        covs = [np.eye(50) / np.sqrt(self.dim), np.eye(50) / np.sqrt(self.dim), np.eye(50) / np.sqrt(self.dim)]
+
+                        random_integer = np.random.randint(0, 3)  # randomly choose a mode from 0 to 2 inclusive
+                        target_mean, target_cov = means[random_integer], covs[random_integer]
+                        proposed_state = np.random.multivariate_normal(target_mean, target_cov / beta)
+                        
+                        chain.append(proposed_state)
                 
-                # then calculate the swap probability between these chains
-                log_swap_prob = (
-                    curr_beta * np.log(self.target_dist(new_beta_chain[-1])) + 
-                    new_beta * np.log(self.target_dist(curr_beta_chain[-1])) -
-                    curr_beta * np.log(self.target_dist(curr_beta_chain[-1])) -
-                    new_beta * np.log(self.target_dist(new_beta_chain[-1]))
-                    )
-                swap_prob = min(1, np.exp(log_swap_prob))
+                # then calculate the swap probability between these chains for each sample
+                # and average them to get an average swap probability
+                avg_swap_prob = np.zeros(total_samples)
+                for i in range(total_samples):
+                    log_swap_prob = (
+                        curr_beta * np.log(self.target_dist(new_beta_chain[burn_in + 1 + i])) + 
+                        new_beta * np.log(self.target_dist(curr_beta_chain[burn_in + 1 + i])) -
+                        curr_beta * np.log(self.target_dist(curr_beta_chain[burn_in + 1 + i])) -
+                        new_beta * np.log(self.target_dist(new_beta_chain[burn_in + 1 + i]))
+                        )
+                    swap_prob = min(1, np.exp(log_swap_prob))
+                    # print("swap_prob:", swap_prob)
+                    avg_swap_prob[i] = swap_prob
+                # print("Average swap probability: ", avg_swap_prob, "new_beta: ", new_beta)
 
-                if 0.22 < swap_prob < 0.24:
+                avg_swap_prob = np.mean(avg_swap_prob)
+
+                # if the average swap probability is close to 0.234
+                # also consider experimenting 
+                if 0.225 < avg_swap_prob < 0.245: 
                     curr_beta = new_beta
+                    print("new beta added to inverse temperature ladder: ", curr_beta, 
+                          "\nSwap probability: ", avg_swap_prob)
                     break
                 else:   # use the recurrence defined in the paper
-                    new_beta = new_beta - (swap_prob - 0.23) / 100
-                    print(swap_prob, new_beta)
-        
+                    print("Average swap probability: ", avg_swap_prob, "new_beta: ", new_beta)
+                    rho_n = rho_n + (avg_swap_prob - 0.23) / np.sqrt(num_iters)
+                    new_beta = curr_beta / (1 + np.exp(rho_n))
+
+            if curr_beta <= beta_min or new_beta <= beta_min:
+                break
+
         self.temp_ladder.append(beta_min)
         self.chains.append(self.chain.copy())
-
+        print("Finished constructing the temperature ladder.")
+        print("Inverse temperature ladder: ", self.temp_ladder)
 
     def attempt_swap(self, j, k):
         """Attempt to swap states between two chains based on Metropolis criteria."""
@@ -126,7 +154,7 @@ class ParallelTemperingRWM(MHAlgorithm):
                 self.attempt_swap(i, i+1)   # this handles swap acceptance rate as well
             else:
                 proposed_state = np.random.multivariate_normal(curr_chain[-1], np.eye(self.dim) * (self.var / self.temp_ladder[i]))
-                log_accept_ratio = self.log_accept_prob(proposed_state, curr_chain[-1])
+                log_accept_ratio = self.log_accept_prob(proposed_state, curr_chain[-1], self.temp_ladder[i])
 
                 # accept the proposed state with probability min(1, A)
                 if log_accept_ratio > 0 or np.random.random() < np.exp(log_accept_ratio):
