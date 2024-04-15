@@ -27,15 +27,19 @@ class MultimodalDensityNew(TargetDistribution):
             float: The density value for the input data point.
         """
         means = [np.zeros(self.dim), np.zeros(self.dim), np.zeros(self.dim)]
-        means[0][0], means[2][0] = -5, 5
+        means[0][0], means[2][0] = -5 / np.sqrt(self.dim), 5 / np.sqrt(self.dim)
 
-        covs = [np.eye(50) / np.sqrt(self.dim), np.eye(50) / np.sqrt(self.dim), np.eye(50) / np.sqrt(self.dim)]
+        covs = [np.eye(self.dim) / np.sqrt(self.dim), np.eye(self.dim) / np.sqrt(self.dim), np.eye(self.dim) / np.sqrt(self.dim)]
 
         # Calculate the density for each mode and sum them
         density = 0
         for mean, cov in zip(means, covs):
             density += 1/3 * multivariate_normal.pdf(x, mean=mean, cov=cov)
 
+        # print("this is x")
+        # print(x)
+        # print("this is the density")
+        # print(density)
         return density
     
 
