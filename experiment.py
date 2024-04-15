@@ -10,14 +10,17 @@ from scipy.stats import multivariate_normal as normal, beta
 from target_distributions import *
 
 if __name__ == "__main__":
-    dim = 50    # dimension of the target and proposal distributions
+    dim = 30    # dimension of the target and proposal distributions
+    temp_beta_ladder = [1, 0.7040429390962937, 0.4780498066581084, 0.3336747815093883, 0.2331427383329218, 0.16114482945558686, 0.11392056374013135, 0.07950805093109076, 0.05184317948035542, 0.01]
     simulation = MCMCSimulation(dim=dim, 
-                            sigma=((2.38 ** 2) / (dim ** (1))),  # 2.38**2 / dim
-                            num_iterations=1000,
+                            sigma=((0.5 ** 2) / (dim ** (1))),  # 2.38**2 / dim
+                            num_iterations=10000,
                             algorithm=ParallelTemperingRWM,
-                            target_dist=MultimodalDensity(dim, scaling=False),  # scaling=True for random scaling factors for the components
+                            target_dist=MultimodalDensityNew(dim),  # scaling=True for random scaling factors for the components
                             symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution
-                            seed=42)
+                            seed=42,
+                            beta_ladder=temp_beta_ladder,
+                            swap_acceptance_rate=0.234)
 
     chain = simulation.generate_samples()
     print(f"Acceptance rate: {simulation.acceptance_rate():.3f}")

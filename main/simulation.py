@@ -16,10 +16,17 @@ class MCMCSimulation:
                  algorithm: MHAlgorithm = RandomWalkMH,
                  target_dist: TargetDistribution = None,
                  symmetric: bool = True,
-                 seed: Optional[int] = None):
+                 seed: Optional[int] = None,
+                 beta_ladder: Optional[list] = None,
+                 swap_acceptance_rate: Optional[float] = None,):
         self.num_iterations = num_iterations
         self.target_dist = target_dist
-        self.algorithm = algorithm(dim, sigma, target_dist.density, symmetric)
+        self.algorithm = algorithm(dim, 
+                                   sigma, 
+                                   target_dist.density, 
+                                   symmetric, 
+                                   beta_ladder=beta_ladder, 
+                                   swap_acceptance_rate=swap_acceptance_rate)   # comment out last two lines for standard rwm
         if seed:
             np.random.seed(seed)
     

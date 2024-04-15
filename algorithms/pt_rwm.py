@@ -11,51 +11,53 @@ class ParallelTemperingRWM(MHAlgorithm):
             var, 
             target_dist: Callable = None, 
             symmetric=True,
-            temp_ladder=None,
+            beta_ladder=None,
             geom_temp_spacing=False,
-            ):
+            swap_acceptance_rate=0.234,):
         super().__init__(dim, var, target_dist, symmetric)
         self.num_swap_attempts = 0
         self.num_acceptances = 0    # use this to calculate acceptance rate
         self.acceptance_rate = 0    # this refers to SWAP acceptance rate
         self.chains = []
-        self.temp_ladder = None
+        self.beta_ladder = beta_ladder
+        self.swap_acceptance_rate = swap_acceptance_rate
         # [1, 0.70529181, 0.49111924, 0.3433667, 0.23914574, 0.16521939, 0.11696551, 0.08199772, 0.05699343, 0.01]
-        if self.temp_ladder is not None:
-            for i in range(len(self.temp_ladder)):  # only if the temp ladder is not none
+        if self.beta_ladder is not None:
+            for i in range(len(self.beta_ladder)):  # only if the temp ladder is not none
                 self.chains.append(self.chain.copy())
 
         else:
-            self.temp_ladder = []
+            self.beta_ladder = []
             if geom_temp_spacing:
                 # construct a geometrically spaced temperature ladder
                 beta_0, beta_min = 1, 1e-2
                 curr_beta = beta_0
                 c = 0.5     # set the geometric spacing constant
                 while curr_beta > beta_min:
-                    self.temp_ladder.append(curr_beta)
+                    self.beta_ladder.append(curr_beta)
                     self.chains.append(self.chain.copy())  # initialize one chain for each temperature
                     curr_beta = curr_beta * c
                 
-                self.temp_ladder.append(beta_min)
+                self.beta_ladder.append(beta_min)
                 self.chains.append(self.chain.copy())
 
                 # iteratively construct the inverse temperatures using simulation-based approach
             else:
                 # TODO: implement the simulation-based approach to construct spacing of prob 0.23
                 # also consider adaptive temperature ladder
-                self.construct_temp_ladder_iteratively()
+                self.construct_beta_ladder_iteratively()
                     
         self.chain = self.chains[0]  # the first chain is the "cold" chain
+        self.log_target_density_curr_state = np.zeros(len(self.beta_ladder))    # store the previously computed target densities
 
 
-    def construct_temp_ladder_iteratively(self):
+    def construct_beta_ladder_iteratively(self):
         """Construct the temperature ladder iteratively using a simulation-based approach."""
         beta_0, beta_min = 1, 1e-2
         curr_beta = beta_0
 
         while curr_beta > beta_min:
-            self.temp_ladder.append(curr_beta)
+            self.beta_ladder.append(curr_beta)
             self.chains.append(self.chain.copy())  # initialize one chain for each temperature
 
             # Find the next inverse temperature beta
@@ -81,9 +83,9 @@ class ParallelTemperingRWM(MHAlgorithm):
                         means = [np.zeros(self.dim), np.zeros(self.dim), np.zeros(self.dim)]
                         means[:][0], means[:][0] = -5, 5
 
-                        covs = [np.eye(50) / np.sqrt(self.dim), np.eye(50) / np.sqrt(self.dim), np.eye(50) / np.sqrt(self.dim)]
+                        covs = [np.eye(self.dim) / np.sqrt(self.dim), np.eye(self.dim) / np.sqrt(self.dim), np.eye(self.dim) / np.sqrt(self.dim)]
 
-                        random_integer = np.random.randint(0, 3, size=50)  # randomly choose a mode from 0 to 2 inclusive
+                        random_integer = np.random.randint(0, 3)  # randomly choose a mode from 0 to 2 inclusive
                         target_mean, target_cov = means[random_integer], covs[random_integer]
                         proposed_state = np.random.multivariate_normal(target_mean, target_cov / beta)
                         
@@ -109,23 +111,23 @@ class ParallelTemperingRWM(MHAlgorithm):
                 # if the average swap probability is close to 0.234
                 # also consider experimenting 
                 error = 0.01
-                if abs(0.234 - avg_swap_prob) <= error: 
+                if abs(self.swap_acceptance_rate - avg_swap_prob) <= error: 
                     curr_beta = new_beta
                     print("new beta added to inverse temperature ladder: ", curr_beta, 
                           "\nSwap probability: ", avg_swap_prob)
                     break
                 else:   # use the recurrence defined in the paper
                     print("Average swap probability: ", avg_swap_prob, "new_beta: ", new_beta)
-                    rho_n = rho_n + (avg_swap_prob - 0.234) / np.sqrt(num_iters)
+                    rho_n = rho_n + (avg_swap_prob - self.swap_acceptance_rate) / np.sqrt(num_iters)
                     new_beta = curr_beta / (1 + np.exp(rho_n))
 
             if curr_beta <= beta_min or new_beta <= beta_min:
                 break
 
-        self.temp_ladder.append(beta_min)
+        self.beta_ladder.append(beta_min)
         self.chains.append(self.chain.copy())
         print("Finished constructing the temperature ladder.")
-        print("Inverse temperature ladder: ", self.temp_ladder)
+        print("Inverse temperature ladder: ", self.beta_ladder)
 
     def attempt_swap(self, j, k):
         """Attempt to swap states between two chains based on Metropolis criteria."""
@@ -136,17 +138,23 @@ class ParallelTemperingRWM(MHAlgorithm):
             temp = self.chains[k][-1].copy()
             self.chains[k][-1] = self.chains[j][-1].copy()
             self.chains[j][-1] = temp
+
+            # swap the log target densities of the current state
+            temp = self.log_target_density_curr_state[j] 
+            self.log_target_density_curr_state[k] = self.log_target_density_curr_state[j]
+            self.log_target_density_curr_state[j] = temp
+
             self.num_acceptances += 1   # increment the number of SWAP acceptances
             self.acceptance_rate = self.num_acceptances / self.num_swap_attempts
 
-
     def log_swap_prob(self, j, k):
-        """Calculate the log probability of swapping states between two chains."""
+        """Calculate the log probability of swapping states between chain j and chain k."""
+        self.log_target_density_curr_state[j]
         log_prob = (
-            self.temp_ladder[j] * np.log(self.target_dist(self.chains[k][-1])) + 
-            self.temp_ladder[k] * np.log(self.target_dist(self.chains[j][-1])) -
-            self.temp_ladder[j] * np.log(self.target_dist(self.chains[j][-1])) -
-            self.temp_ladder[k] * np.log(self.target_dist(self.chains[k][-1]))
+            self.beta_ladder[j] * self.log_target_density_curr_state[k] + 
+            self.beta_ladder[k] * self.log_target_density_curr_state[j] -
+            self.beta_ladder[j] * self.log_target_density_curr_state[j] -
+            self.beta_ladder[k] * self.log_target_density_curr_state[k]
                 )
         return log_prob
     
@@ -160,17 +168,19 @@ class ParallelTemperingRWM(MHAlgorithm):
                 self.attempt_swap(i, i+1)   # this handles swap acceptance rate as well
             else:
                 # 2.38**2 / (dim * beta)
-                proposed_state = np.random.multivariate_normal(curr_chain[-1], np.eye(self.dim) * (self.var / self.temp_ladder[i]))
-                log_accept_ratio = self.log_accept_prob(proposed_state, curr_chain[-1], self.temp_ladder[i])
+                curr_state_target_logdensity = self.log_target_density_curr_state[i]
+                proposed_state = np.random.multivariate_normal(curr_chain[-1], np.eye(self.dim) * (self.var / self.beta_ladder[i]))
+                log_accept_ratio, proposed_targetlogdensity = self.log_accept_prob(proposed_state, curr_state_target_logdensity, self.beta_ladder[i], curr_chain[-1],)
 
                 # accept the proposed state with probability min(1, A)
                 if log_accept_ratio > 0 or np.random.random() < np.exp(log_accept_ratio):
                     curr_chain.append(proposed_state)
+                    self.log_target_density_curr_state[i] = proposed_targetlogdensity
                 else:
                     curr_chain.append(curr_chain[-1])
 
 
-    def log_accept_prob(self, proposed_state, current_state, beta):
+    def log_accept_prob(self, proposed_state, currstate_targetlogdensity, beta, current_state):
         """Calculate the log acceptance probability for the proposed state given the current state.
         We use the log density of the target distribution for numerical stability in high dimensions.
 
@@ -182,12 +192,16 @@ class ParallelTemperingRWM(MHAlgorithm):
         Returns:
             float: The log acceptance probability."""
         if self.symmetric:
-            return beta * (np.log(self.target_dist(proposed_state)) - np.log(self.target_dist(current_state)))
+            proposed_targetlogdensity = np.log(self.target_dist(proposed_state))
+            ret = beta * (proposed_targetlogdensity - currstate_targetlogdensity)
+            return ret, proposed_targetlogdensity
+        
         else:
-            log_target_term = np.log(self.target_dist(proposed_state)) - np.log(self.target_dist(current_state))
+            proposed_targetlogdensity = np.log(self.target_dist(proposed_state))
+            log_target_term = proposed_targetlogdensity - currstate_targetlogdensity
             log_proposal_term = (np.log(normal.pdf(current_state, mean=proposed_state, 
                                                    cov=np.eye(self.dim) * (self.var))) 
                                 - np.log(normal.pdf(proposed_state, mean=current_state, 
                                                     cov=np.eye(self.dim) * (self.var))))
-
-            return (log_target_term + log_proposal_term) * beta
+            ret = (log_target_term + log_proposal_term) * beta
+            return ret, proposed_targetlogdensity
