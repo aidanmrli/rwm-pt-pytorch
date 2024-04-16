@@ -9,7 +9,7 @@ class RandomWalkMH(MHAlgorithm):
         super().__init__(dim, var, target_dist, symmetric)
         self.num_acceptances = 0    # use this to calculate acceptance rate
         self.acceptance_rate = 0
-        self.log_target_density_curr_state = 0
+        self.log_target_density_curr_state = -np.inf
 
     def step(self):
         """Take a step using the Random Walk Metropolis-Hastings algorithm.
@@ -20,7 +20,7 @@ class RandomWalkMH(MHAlgorithm):
         proposed_state = np.random.multivariate_normal(self.chain[-1], np.eye(self.dim) * (self.var))
     
         log_accept_ratio, log_target_density_proposed_state = self.log_accept_prob(proposed_state, self.log_target_density_curr_state, self.chain[-1])
-        print(log_accept_ratio)
+        # print(log_accept_ratio)
         # accept the proposed state with probability min(1, A)
         if log_accept_ratio > 0 or np.random.random() < np.exp(log_accept_ratio):
             self.chain.append(proposed_state)
