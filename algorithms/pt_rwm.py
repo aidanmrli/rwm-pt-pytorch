@@ -169,12 +169,12 @@ class ParallelTemperingRWM(MHAlgorithm):
                 # 2.38**2 / (dim * beta)
                 curr_state_target_logdensity = self.log_target_density_curr_state[i]
                 proposed_state = np.random.multivariate_normal(curr_chain[-1], np.eye(self.dim) * (self.var / self.beta_ladder[i]))
-                log_accept_ratio, proposed_targetlogdensity = self.log_accept_prob(proposed_state, curr_state_target_logdensity, self.beta_ladder[i], curr_chain[-1],)
+                log_accept_ratio, log_target_density_proposed_state = self.log_accept_prob(proposed_state, curr_state_target_logdensity, self.beta_ladder[i], curr_chain[-1],)
 
                 # accept the proposed state with probability min(1, A)
                 if log_accept_ratio > 0 or np.random.random() < np.exp(log_accept_ratio):
                     curr_chain.append(proposed_state)
-                    self.log_target_density_curr_state[i] = proposed_targetlogdensity
+                    self.log_target_density_curr_state[i] = log_target_density_proposed_state
                 else:
                     curr_chain.append(curr_chain[-1])
 
@@ -191,7 +191,7 @@ class ParallelTemperingRWM(MHAlgorithm):
         Returns:
             float: The log acceptance probability."""
         if self.symmetric:
-            proposed_targetlogdensity = np.log(self.target_dist(proposed_state))
+            proposed_targetlogdensity = np.log(self.target_dist(proposed_state) + 1e-100)
             ret = beta * (proposed_targetlogdensity - currstate_targetlogdensity)
             return ret, proposed_targetlogdensity
         
