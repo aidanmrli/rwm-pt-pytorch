@@ -48,7 +48,7 @@ class ParallelTemperingRWM(MHAlgorithm):
                 self.construct_beta_ladder_iteratively()
                     
         self.chain = self.chains[0]  # the first chain is the "cold" chain
-        self.log_target_density_curr_state = np.zeros(len(self.beta_ladder))    # store the previously computed target densities
+        self.log_target_density_curr_state = np.ones(len(self.beta_ladder)) * -np.inf    # store the previously computed target densities
 
 
     def construct_beta_ladder_iteratively(self):
@@ -149,7 +149,6 @@ class ParallelTemperingRWM(MHAlgorithm):
 
     def log_swap_prob(self, j, k):
         """Calculate the log probability of swapping states between chain j and chain k."""
-        self.log_target_density_curr_state[j]
         log_prob = (
             self.beta_ladder[j] * self.log_target_density_curr_state[k] + 
             self.beta_ladder[k] * self.log_target_density_curr_state[j] -
