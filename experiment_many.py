@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == "__main__":
-    dim = 20    # dimension of the target and proposal distributions
+    dim = 50    # dimension of the target and proposal distributions
     # run many simulations for different variance values
     var_value_range = np.linspace(0.001, 4, 40)
     # save results for plotting
@@ -36,6 +36,11 @@ if __name__ == "__main__":
         acceptance_rates.append(simulation.acceptance_rate())
         expected_squared_jump_distances.append(simulation.expected_squared_jump_distance())
 
+        # see the "optimal" histogram to see if results are consistent
+        if 0.23 < simulation.acceptance_rate() < 0.235:
+            simulation.samples_histogram()
+            simulation.traceplot(single_dim=True)   # single_dim=True to plot only the first dimension
+
     # plot results
     plt.plot(acceptance_rates, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   
     plt.xlabel('acceptance rate')
@@ -56,7 +61,7 @@ if __name__ == "__main__":
     plt.show()
 
     # see the last histogram to see if results are consistent
-    simulation.samples_histogram()
+    simulation.samples_histogram(dim=0)  # plot the histogram of the first dimension
     simulation.traceplot(single_dim=True)   # single_dim=True to plot only the first dimension
     # simulation.traceplot(single_dim=False)  # single_dim=False to plot all dimensions
 
