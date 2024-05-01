@@ -58,3 +58,6 @@ General classes with their attributes and methods are in the main folder.
 - MHAlgorithm is a general interface for a Metropolis-Hastings algorithm for sampling for a target distribution.  The implementations of this class in the algorithms folder implement these methods, such as calculating the (log) acceptance probability.
 
 Algorithm implementations are in the algorithms folder. Likewise, target distribution implementations are in the target_distributions folder. These implementations _inherit_ the methods and attributes defined by their parents, allowing for a greater degree of consistency between different implementations.
+
+## License
+This repository is MIT licensed. See the LICENSE file in the root directory.
