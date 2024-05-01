@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.stats import multivariate_normal as normal
 from main import MHAlgorithm
-from typing import Callable
 from algorithms import RandomWalkMH
 from main import TargetDistribution
 

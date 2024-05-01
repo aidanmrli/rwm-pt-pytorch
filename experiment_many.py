@@ -6,7 +6,7 @@ Useful to study the acceptance rate and the expected squared jump distance for d
 from main.simulation import MCMCSimulation
 from algorithms import *
 import numpy as np
-from scipy.stats import multivariate_normal as normal, beta
+from scipy.stats import multivariate_normal as normal
 from target_distributions import *
 import matplotlib.pyplot as plt
 

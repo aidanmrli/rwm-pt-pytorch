@@ -6,7 +6,7 @@ Useful to study the mixing of the chain in multiple modes by plotting a traceplo
 from main.simulation import MCMCSimulation
 from algorithms import *
 import numpy as np
-from scipy.stats import multivariate_normal as normal, beta
+from scipy.stats import multivariate_normal as normal
 from target_distributions import *
 
 if __name__ == "__main__":

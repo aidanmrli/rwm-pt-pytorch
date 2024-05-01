@@ -6,7 +6,7 @@ Useful to study the acceptance rate and the expected squared jump distance for d
 from main.simulation import MCMCSimulation
 from algorithms import *
 import numpy as np
-from scipy.stats import multivariate_normal as normal, beta
+from scipy.stats import multivariate_normal as normal
 from target_distributions import *
 import matplotlib.pyplot as plt
 
@@ -15,7 +15,7 @@ if __name__ == "__main__":
     dim = 20    # dimension of the target and proposal distributions
     # run many simulations for different variance values
     swap_acceptance_rates_range = np.linspace(0.01, 0.8, 20)
-    num_seeds = 5
+    num_seeds = 3
 
     # save results for plotting
     acceptance_rates = []
@@ -31,7 +31,7 @@ if __name__ == "__main__":
         for seed_val in range(num_seeds):
             simulation = MCMCSimulation(dim=dim, 
                             sigma=((2.38 ** 2) / (dim ** (1))),  # 2.38**2 / dim
-                            num_iterations=100000,
+                            num_iterations=20000,
                             algorithm=ParallelTemperingRWM,
                             target_dist=MultimodalDensityNew(dim),  # scaling=True for random scaling factors for the components
                             symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution
@@ -50,8 +50,17 @@ if __name__ == "__main__":
     print(f"Maximum ESJD: {max(expected_squared_jump_distances)}")
     print(f"Swap acceptance rate corresponding to maximum ESJD: {acceptance_rates[np.argmax(expected_squared_jump_distances)]}")
     # plot results
+
+    # with the actual swap acceptance rate of the simulation
     plt.plot(acceptance_rates, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   
-    plt.xlabel('acceptance rate')
+    plt.xlabel('swap acceptance rate (actual)')
+    plt.ylabel('ESJD')
+    plt.title(f'ESJD vs swap acceptance rate (dim={dim})')
+    plt.show()
+
+    # with the desired swap acceptance rate when the ladder was constructed
+    plt.plot(swap_acceptance_rates_range, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   
+    plt.xlabel('swap acceptance rate (construction)')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs swap acceptance rate (dim={dim})')
     plt.show()
