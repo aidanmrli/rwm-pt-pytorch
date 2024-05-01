@@ -71,5 +71,4 @@ if __name__ == "__main__":
     # see the last histogram to see if results are consistent
     simulation.samples_histogram(dim=0)  # plot the histogram of the first dimension
     simulation.traceplot(single_dim=True)   # single_dim=True to plot only the first dimension
-    # simulation.traceplot(single_dim=False)  # single_dim=False to plot all dimensions
 
