@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from .metropolis import MHAlgorithm
 from .target import TargetDistribution
-from algorithms import *
 from typing import Optional, Callable
 import tqdm
 
@@ -13,15 +12,23 @@ class MCMCSimulation:
                  dim: int, 
                  sigma: float, 
                  num_iterations: int = 1000, 
-                 algorithm: MHAlgorithm = RandomWalkMH,
+                 algorithm: MHAlgorithm = None,
                  target_dist: TargetDistribution = None,
                  symmetric: bool = True,
-                 seed: Optional[int] = None):
+                 seed: Optional[int] = None,
+                 beta_ladder: Optional[list] = None,
+                 swap_acceptance_rate: Optional[float] = None,):
         self.num_iterations = num_iterations
         self.target_dist = target_dist
-        self.algorithm = algorithm(dim, sigma, target_dist.density, symmetric)
+        self.algorithm = algorithm(dim, 
+                                   sigma, 
+                                   target_dist, 
+                                   symmetric, 
+                                   beta_ladder=beta_ladder, 
+                                   swap_acceptance_rate=swap_acceptance_rate)   # comment out last two lines for standard rwm
         if seed:
             np.random.seed(seed)
+
     
     def reset(self):
         """Reset the simulation to the initial state."""
@@ -38,9 +45,6 @@ class MCMCSimulation:
         print("Running the MCMC simulation...")
         with tqdm.tqdm(total=self.num_iterations, desc="Running MCMC", unit="iteration") as pbar:
             for i in range(self.num_iterations):
-                if i % 20 == 0 and type(self.algorithm) is ParallelTemperingRWM:
-                    self.algorithm.step(swap=True)
-                    continue
                 self.algorithm.step()
                 pbar.update(1)
 
@@ -117,8 +121,9 @@ class MCMCSimulation:
 
         # Generate values for plotting the target density
         x = np.array([np.array([v]) for v in np.linspace(min(-20, min(samples) - 5), max(20, max(samples) + 5), 1000)])
-        y = np.zeros_like(x)
 
+        ## For plotting the target density (red dashed line)
+        # y = np.zeros_like(x)
         # for i in range(len(x)):
         #     y[i] = self.target_dist.density(x[i])   # how to visualize a single component of the target density?
 

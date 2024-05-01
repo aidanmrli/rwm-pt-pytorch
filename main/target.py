@@ -8,6 +8,8 @@ class TargetDistribution:
         """Compute the density of the distribution at a given point x."""
         raise NotImplementedError("Subclasses must implement the density method.")
 
-    def grad_log_density(self, x):
-        """Compute the gradient of the log density of the distribution at a given point x."""
-        raise NotImplementedError("Subclasses must implement the grad_log_density method.")
+    def draw_sample(self, beta=1.0):
+        """Draw a sample from the target distribution. This is meant to be a cheap heuristic
+        used for constructing the temperature ladder in parallel tempering.
+        Do not use this to draw samples in an actual Metropolis algorithm."""
+        raise NotImplementedError("Subclasses must implement the draw_sample method.")
