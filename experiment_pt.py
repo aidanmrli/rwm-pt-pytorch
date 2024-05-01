@@ -43,12 +43,13 @@ if __name__ == "__main__":
             seed_results_acceptance.append(simulation.acceptance_rate())
             seed_results_esjd.append(simulation.expected_squared_jump_distance())
 
-        # calculate average acceptance rate and ESJD for this variance value
+        # calculate average acceptance rate and ESJD
         acceptance_rates.append(np.mean(seed_results_acceptance))
         expected_squared_jump_distances.append(np.mean(seed_results_esjd))
 
     print(f"Maximum ESJD: {max(expected_squared_jump_distances)}")
-    print(f"Swap acceptance rate corresponding to maximum ESJD: {acceptance_rates[np.argmax(expected_squared_jump_distances)]}")
+    print(f"(Actual) Swap acceptance rate corresponding to maximum ESJD: {acceptance_rates[np.argmax(expected_squared_jump_distances)]}")
+    print(f"(Construction) Swap acceptance rate value corresponding to maximum ESJD: {swap_acceptance_rates_range[np.argmax(expected_squared_jump_distances)]}")
     # plot results
 
     # with the actual swap acceptance rate of the simulation
