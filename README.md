@@ -10,7 +10,19 @@ We offer implementations of the following:
 - Experiment suite to run individual simulations, or many simulations with a changed value (such as the scaling), or parallel tempering algorithms.
 - Clean architecture adhering to SOLID principles so that this repository can be extended easily with a plug-and-play system for algorithms, target distributions, and proposal distributions in experiments.
 
-## To run a single experiment:
+## Getting Started
+### Installation
+To download the repository, navigate to a directory in your terminal and run `https://github.com/aidanmrli/montecarlo.git`.
+Once you have this repository locally, navigate into the repository. 
+While you are in the root directory, run `pip install -r requirements.txt`. Python comes with pip automatically installed, but if you have any issues please go to `https://pip.pypa.io/en/stable/installation/`.
+
+```bash
+git clone https://github.com/aidanmrli/montecarlo.git
+cd montecarlo
+pip install -r requirements.txt
+```
+
+### To run a single experiment:
 Run experiment.py (in the root directory). Adjust the simulation arguments as necessary before the experiment: 
 - change the dimension of the target and proposal distributions
 - proposal variance (sigma)
@@ -22,7 +34,7 @@ Run experiment.py (in the root directory). Adjust the simulation arguments as ne
 
 The MCMCSimulation class can generate visualizations such as a histogram in a single dimension, and the traceplot of the Markov chain in a single dimension (or all dimensions).
 
-## To run many experiments:
+### To run many experiments:
 Maybe you might want to see how acceptance rate and ESJD change as you vary a single variable, such as the scaling of the proposal, or the temperature spacing between chains in a parallel tempering algorithm.
 
 Run experiment_many.py or experiment_pt.py in the root directory. Adjust the simulation arguments as necessary before the experiment: 
