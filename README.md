@@ -37,6 +37,16 @@ Both of these files average the results over multiple data seeds to reduce the e
 experiment_many.py plots line graphs for ESJD vs acceptance rate, acceptance rate vs proposal variance, and ESJD vs proposal variance.
 experiment_pt.py plots line graphs for ESJD vs the swap acceptance rate of the actual ran algorithms
 
+### To Run Multivariate Gaussian Examples with IID Components:
+(Section 3.1.1 in the report) If without scaling factors: Run Metropolis Algorithm.py in the main folder. It contains running the Metropolis algorithm, generating the trace plot, and displaying the relation between ESJD and acceptance rate with various proposal variances. An example experiment is provided at the end, where you can modify the values, comment or uncomment code sections to obtain the plots and results.
+
+(Section 3.1.2 in the report) If with scaling factors: Run factor_metropolis_algorithm.py in the main folder. It involves running the Metropolis algorithm, defining the scaling factors, generating the trace plot, and displaying the relation between ESJD and acceptance rate with various proposal variances. An example experiment is provided at the end, and you're welcome to adjust the initial values for further experimentation.
+
+### To Run Multivariate Gaussian Examples with NON-IID Components:
+(Section 3.2.1) If non-independent case: Run dependent_Multivariate_Gaussian_Case.py in the main folder. There are three different cases regarding the proposal distribution. The file includes guidance, explanations, and comments to help you run various experiments with different proposal distributions.
+
+(Section 3.2.2) If non-identically distributed case: Run converge_target_density_case.py in the main folder. Similar to the above procedure, it includes an example of experiments at the end.
+
 ## Directory Structure
 General classes with their attributes and methods are in the main folder. 
 - MCMCSimulation is a class for running a single MCMC simulation for generating samples from a target distribution and visualizing the various metrics and results.
