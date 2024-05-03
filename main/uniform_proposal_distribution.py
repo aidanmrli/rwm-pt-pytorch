@@ -33,7 +33,7 @@ def proposal_distribution(dimension, x, proposed_cov, function):
 def metropolis_algorithm(dimension, target_distrn, proposed_distribution,
                          iteration, proposed_cov, iid=True):
     if dimension != 1:
-        x_initial = np.zeros(dimension)
+        x_initial = np.zeros(dimension) # the initial starting points can be modified
     else:
         x_initial = 0
     sampling = [np.array(x_initial)]
