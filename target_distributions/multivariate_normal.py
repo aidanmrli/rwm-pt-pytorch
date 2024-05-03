@@ -1,5 +1,5 @@
 import numpy as np
-from main import TargetDistribution
+from interfaces import TargetDistribution
 from scipy.stats import norm, multivariate_normal
 
 class MultivariateNormal(TargetDistribution):
@@ -49,10 +49,6 @@ class MultivariateNormal(TargetDistribution):
         """
         if isinstance(x, (int, float)) or len(x) == 1:
             return self.density_1d(x)
-        # x_centered = x - self.mean
-        # inv_cov = np.linalg.inv(self.cov)
-        # quad_form = np.dot(x_centered.T, np.dot(inv_cov, x_centered))
-        # return (1 / np.sqrt((2 * np.pi) ** self.dim * np.linalg.det(self.cov))) * np.exp(-0.5 * quad_form)
         return multivariate_normal.pdf(x, mean=self.mean, cov=self.cov)
 
     def draw_sample(self, beta=1):

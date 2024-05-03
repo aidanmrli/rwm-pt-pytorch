@@ -67,6 +67,15 @@ class MCMCSimulation:
         chain = np.array(self.algorithm.chain)
         squared_jumps = np.sum((chain[1:] - chain[:-1]) ** 2, axis=1)
         return np.mean(squared_jumps)
+    
+    def pt_expected_squared_jump_distance(self):
+        """Calculate the expected squared jump distance for parallel tempering.
+        Returns:
+            float: The expected squared jump distance.
+        """
+        if not self.has_run():
+            raise ValueError("The algorithm has not been run yet.")
+        return self.algorithm.pt_esjd
 
     def traceplot(self, single_dim=False):
         """Visualize the traceplot of the Markov chain.
@@ -86,22 +95,10 @@ class MCMCSimulation:
         plt.xlabel('Iteration')
         plt.ylabel('Value')
         plt.legend()
-        plt.title(f'variance = {self.algorithm.var:.3f}, acceptance rate = {self.acceptance_rate():.3f}, ESJD = {self.expected_squared_jump_distance():.3f}')
-        plt.show()
-
-    def autocorrelation_plot(self):
-        """Visualize the autocorrelation of the Markov chain.
-        """
-        if not self.has_run():
-            raise ValueError("The algorithm has not been run yet.")
-        chain = np.array(self.algorithm.chain)
-        autocorr = np.zeros(self.algorithm.dim)
-        for i in range(self.algorithm.dim):
-            autocorr[i] = np.correlate(chain[:, i] - np.mean(chain[:, i]), chain[:, i] - np.mean(chain[:, i]), mode='full')[chain.shape[0] - 1]
-        
-        plt.stem(range(len(autocorr)), autocorr)
-        plt.xlabel('Lag')
-        plt.ylabel('Autocorrelation')
+        if hasattr(self.algorithm, 'pt_esjd'): # parallel tempering case
+            plt.title(f'variance = {self.algorithm.var:.3f}, acceptance rate = {self.acceptance_rate():.3f}, ESJD = {self.algorithm.pt_esjd:.5f}')
+        else:
+            plt.title(f'variance = {self.algorithm.var:.3f}, acceptance rate = {self.acceptance_rate():.3f}, ESJD = {self.expected_squared_jump_distance():.3f}')
         plt.show()
 
     def samples_histogram(self, num_bins=50, dim=0):
@@ -131,5 +128,8 @@ class MCMCSimulation:
         plt.xlabel('Value')
         plt.ylabel('Density')
         plt.legend()
-        plt.title(f'var = {self.algorithm.var:.3f}, a = {self.acceptance_rate():.3f}, ESJD = {self.expected_squared_jump_distance():.3f}, num_iter = {self.num_iterations}')
+        if hasattr(self.algorithm, 'pt_esjd'): # parallel tempering case
+            plt.title(f'variance = {self.algorithm.var:.3f}, a = {self.acceptance_rate():.3f}, ESJD = {self.algorithm.pt_esjd:.5f}')
+        else:
+            plt.title(f'variance = {self.algorithm.var:.3f}, a = {self.acceptance_rate():.3f}, ESJD = {self.expected_squared_jump_distance():.3f}')
         plt.show()

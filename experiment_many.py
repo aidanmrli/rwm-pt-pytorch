@@ -1,18 +1,19 @@
 """
-This script runs many simulations for different variance values and saves the results for plotting.
-Useful to study the acceptance rate and the expected squared jump distance for different variance values.
+This standard RWM script runs many simulations for different variance values 
+and saves the results for plotting.
+Useful to study the acceptance rate and the expected squared jump distance 
+for different variance values.
 """
 
-from main.simulation import MCMCSimulation
+from interfaces import MCMCSimulation
 from algorithms import *
 import numpy as np
-from scipy.stats import multivariate_normal as normal
 from target_distributions import *
 import matplotlib.pyplot as plt
 
 
 if __name__ == "__main__":
-    dim = 20    # dimension of the target and proposal distributions
+    dim = 30    # dimension of the target and proposal distributions
     # run many simulations for different variance values
     var_value_range = np.linspace(0.001, 4, 40)
     num_seeds = 5
@@ -21,8 +22,12 @@ if __name__ == "__main__":
     acceptance_rates = []
     expected_squared_jump_distances = []
 
-    # keep scaling factors consistent in the target density across experiments
-    target_density_scaled = MultimodalDensityIID(dim, scaling=True)
+    ### keep scaling factors consistent in the target density across experiments
+    ### set scaling=True for random i.i.d. scaling factors for the components
+    ### choose the rough carpet or three mixture or standard multivariate normal
+    target_distribution = MultivariateNormal(dim)
+    # target_distribution = RoughCarpetDistribution(dim, scaling=False)
+    # target_distribution = ThreeMixtureDistribution(dim, scaling=False)
 
     for var in var_value_range:
         variance = (var ** 2) / (dim ** (1))
@@ -34,7 +39,7 @@ if __name__ == "__main__":
                                         sigma=variance,  # 2.38**2 / dim
                                         num_iterations=100000,
                                         algorithm=RandomWalkMH,
-                                        target_dist=target_density_scaled,  # scaling=True for random scaling factors for the components
+                                        target_dist=target_distribution,
                                         symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution
                                         seed=seed_val)
             
@@ -49,7 +54,8 @@ if __name__ == "__main__":
     print(f"Maximum ESJD: {max(expected_squared_jump_distances)}")
     print(f"Acceptance rate corresponding to maximum ESJD: {acceptance_rates[np.argmax(expected_squared_jump_distances)]}")
     print(f"Variance value corresponding to maximum ESJD: {var_value_range[np.argmax(expected_squared_jump_distances)]}")
-    # plot results
+    
+    ### plot results
     plt.plot(acceptance_rates, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   
     plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
@@ -68,7 +74,7 @@ if __name__ == "__main__":
     plt.title(f'ESJD for different variance values (dim={dim})')
     plt.show()
 
-    # see the last histogram to see if results are consistent
+    ### see the last histogram to see if results are consistent
     simulation.samples_histogram(dim=0)  # plot the histogram of the first dimension
     simulation.traceplot(single_dim=True)   # single_dim=True to plot only the first dimension
 
