@@ -22,12 +22,12 @@ cd montecarlo
 pip install -r requirements.txt
 ```
 
-### To run a single experiment:
+### To run a single experiment (Sections 5, 6):
 Run experiment.py (in the root directory). Adjust the simulation arguments in experiment.py as necessary before the experiment.
 
 The MCMCSimulation class can generate visualizations such as a histogram in a single dimension, and the traceplot of the Markov chain in a single dimension (or all dimensions).
 
-### To run many experiments:
+### To run many experiments (Sections 5, 6):
 Maybe you might want to see how acceptance rate and ESJD change as you vary a single variable, such as the scaling of the proposal, or the temperature spacing between chains in a parallel tempering algorithm.
 
 Run experiment_many.py or experiment_pt.py in the root directory. Adjust the simulation arguments in these files as necessary before the experiment.
@@ -57,7 +57,7 @@ experiment_pt.py plots line graphs for ESJD vs the swap acceptance rate of the a
 (Section 4.5) Run inhomogeneous_target_distribution.py in the main folder. This file includes running the Metropolis algorithm, generating the trace plot and histogram, and the relationship between ESJD and acceptance rate. You can comment or uncomment codes to have different target distributions and proposal distributions.
 
 ## Directory Structure
-General classes with their attributes and methods are in the main folder. 
+General classes with their attributes and methods are in the interfaces folder. 
 - MCMCSimulation is a class for running a single MCMC simulation for generating samples from a target distribution and visualizing the various metrics and results.
 - TargetDistribution is a general interface for specifying the methods of a target distribution. The implementations of this class in the target_distributions folder implement these methods, such as the density.
 - MHAlgorithm is a general interface for a Metropolis-Hastings algorithm for sampling for a target distribution.  The implementations of this class in the algorithms folder implement these methods, such as calculating the (log) acceptance probability.
