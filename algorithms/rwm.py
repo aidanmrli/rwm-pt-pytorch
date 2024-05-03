@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.stats import multivariate_normal as normal
-from main import MHAlgorithm
-from main import TargetDistribution
+from interfaces import MHAlgorithm, TargetDistribution
 
 class RandomWalkMH(MHAlgorithm):
     """Implementation of the Random Walk Metropolis-Hastings algorithm for sampling from a target distribution."""

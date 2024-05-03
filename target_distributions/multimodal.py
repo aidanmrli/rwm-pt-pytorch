@@ -1,8 +1,8 @@
 import numpy as np
-from main import TargetDistribution
+from interfaces import TargetDistribution
 from scipy.stats import multivariate_normal
 
-class MultimodalDensityNew(TargetDistribution):
+class ThreeMixtureDistribution(TargetDistribution):
     """Class for a multimodal target distribution with three modes:
         one at (-c, 0, 0, ..., 0), 
         one at (0, 0, 0, ..., 0), 
@@ -16,7 +16,7 @@ class MultimodalDensityNew(TargetDistribution):
         self.means = [np.zeros(self.dim), np.zeros(self.dim), np.zeros(self.dim)]
         self.means[0][0], self.means[2][0] = -15, 15
 
-        ## Choose which covariance matrix to use!
+        ### Choose which covariance matrix to use!
         # self.covs = [np.eye(self.dim) / np.sqrt(self.dim), np.eye(self.dim) / np.sqrt(self.dim), np.eye(self.dim) / np.sqrt(self.dim)]
         # self.covs = [np.eye(self.dim) * 0.6, np.eye(self.dim) * 1.0, np.eye(self.dim) * 1.4]
         self.covs = [np.eye(self.dim), np.eye(self.dim), np.eye(self.dim)]
@@ -54,20 +54,22 @@ class MultimodalDensityNew(TargetDistribution):
         return np.random.multivariate_normal(target_mean, target_cov / beta)
     
 
-class MultimodalDensityIID(TargetDistribution):
+class RoughCarpetDistribution(TargetDistribution):
     """Class for 'rough carpet' multimodal target distributions that are products of 1D multimodal distributions."""
 
     def __init__(self, dimension, scaling=False):
         super().__init__(dimension)
-        if scaling:  # Randomly sample scaling factors, must have mean 1
+        self.modes = [-10, 0, 10]
+        self.weights = [0.5, 0.3, 0.2]
+        if scaling:  # Randomly sample scaling factors, distribution must have mean 1
             self.scaling_factors = np.random.uniform(0.000001, 2, self.dim)
     
     def density_1d(self, x):
         """Compute the density of a multimodal 1D distribution with three modes."""
-        mode1 = np.exp(-0.5 * (x - (-5))**2) / np.sqrt(2 * np.pi)
-        mode2 = np.exp(-0.5 * (x - 0)**2) / np.sqrt(2 * np.pi)
-        mode3 = np.exp(-0.5 * (x - 5)**2) / np.sqrt(2 * np.pi)
-        return 0.5 * mode1 + 0.3 * mode2 + 0.2 * mode3
+        mode0 = np.exp(-0.5 * (x - self.modes[0])**2) / np.sqrt(2 * np.pi)
+        mode1 = np.exp(-0.5 * (x - self.modes[1])**2) / np.sqrt(2 * np.pi)
+        mode2 = np.exp(-0.5 * (x - self.modes[2])**2) / np.sqrt(2 * np.pi)
+        return self.weights[0] * mode0 + self.weights[1] * mode1 + self.weights[2] * mode2
     
     def density(self, x):
         """Compute the density of the multimodal distribution at a given point x."""
@@ -88,11 +90,9 @@ class MultimodalDensityIID(TargetDistribution):
         used for constructing the temperature ladder in parallel tempering.
         Do not use this to draw samples in an actual Metropolis algorithm."""
         sample = np.zeros(self.dim)
-        mean_locations = [-5, 0, 5]  # The numbers to pick from
-        probabilities = [0.5, 0.3, 0.2]  # The corresponding probabilities
-        
+
         for i in range(self.dim):
-            mean_value = np.random.choice(mean_locations, p=probabilities)
+            mean_value = np.random.choice(self.modes, p=self.weights)
             sample[i] = np.random.normal(mean_value, 1 / beta)
         
         return sample

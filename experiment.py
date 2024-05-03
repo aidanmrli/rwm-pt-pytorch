@@ -1,27 +1,35 @@
 """
-This script runs a single simulation and prints the acceptance rate and the expected squared jump distance.
-Useful to study the mixing of the chain in multiple modes by plotting a traceplot and samples histogram of the first dimension.
+This script runs a single simulation of either standard RWM or 
+parallel tempering and prints the acceptance rate 
+and the expected squared jump distance.
+Useful to study the mixing of the chain in multiple modes by plotting 
+a traceplot and samples histogram of the first dimension.
 """
 
-from main.simulation import MCMCSimulation
+from interfaces import MCMCSimulation
 from algorithms import *
 import numpy as np
-from scipy.stats import multivariate_normal as normal
 from target_distributions import *
 
 if __name__ == "__main__":
-    dim = 20    # dimension of the target and proposal distributions
-    # temp_beta_ladder = [1, 0.6785718239036314, 0.43023132454234414, 0.2725213895029845, 0.18473698921221351, 0.01]
-    # temp_beta_ladder = [1, 0.7040429390962937, 0.4780498066581084, 0.3336747815093883, 0.2331427383329218, 0.16114482945558686, 0.11392056374013135, 0.07950805093109076, 0.05184317948035542, 0.01]
-    temp_beta_ladder = [1., 0.57673998, 0.33056428, 0.18934297, 0.10882526, 0.06198466, 0.03536004, 0.02008734, 0.01]
+    dim = 30    # dimension of the target and proposal distributions
+    
+    ### Reuse some beta ladder if you would like to save time
+    # temp_beta_ladder = [1, 0.7201258143345616, 0.5351535500164732, 0.40699808631201695, 0.31168319620186075, 0.23789880207916622, 0.1726209665306218, 0.117096477032898, 0.07923549613447455, 0.01]
+    
+    ### choose the rough carpet or three mixture or standard multivariate normal
+    target_distribution = MultivariateNormal(dim)
+    # target_distribution = RoughCarpetDistribution(dim, scaling=False)
+    # target_distribution = ThreeMixtureDistribution(dim, scaling=False)
+
     simulation = MCMCSimulation(dim=dim, 
                             sigma=((2.38 ** 2) / (dim ** (1))),  # 2.38**2 / dim
-                            num_iterations=100000,
-                            algorithm=ParallelTemperingRWM,
-                            target_dist=MultimodalDensityNew(dim),  # scaling=True for random scaling factors for the components
+                            num_iterations=10000,
+                            algorithm=RandomWalkMH, # RandomWalkMH or ParallelTemperingRWM
+                            target_dist=target_distribution,
                             symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution
-                            seed=42,
-                            beta_ladder=temp_beta_ladder,
+                            seed=1,
+                            beta_ladder=None,
                             swap_acceptance_rate=0.234)
 
     chain = simulation.generate_samples()
