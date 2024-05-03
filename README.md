@@ -47,6 +47,12 @@ experiment_pt.py plots line graphs for ESJD vs the swap acceptance rate of the a
 
 (Section 3.2.2) If non-identically distributed case: Run converge_target_density_case.py in the main folder. Similar to the above procedure, it includes an example of experiments at the end.
 
+### To Run Double Exponential Proposal Distribution Examples
+(Section 4.2) Run double_exponential_proposal_distribution_example.py in the main folder. This file includes running the Metropolis algorithm, generating the trace plot and histogram, and the relationship between ESJD and acceptance rate. You can modify the values of the example at the end.
+
+### To Run Uniform Proposal Distribution Examples
+(Section 4.3) Run uniform_proposal_distribution.py in the main folder. This file includes running the Metropolis algorithm, generating the trace plot and histogram, and the relationship between ESJD and acceptance rate. You can modify the values of the example at the end.
+
 ## Directory Structure
 General classes with their attributes and methods are in the main folder. 
 - MCMCSimulation is a class for running a single MCMC simulation for generating samples from a target distribution and visualizing the various metrics and results.
