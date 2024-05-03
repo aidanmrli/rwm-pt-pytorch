@@ -106,10 +106,10 @@ def trace_plot(sampling, dimension):
 def target_distrn_1_dim(x, i):
     """Define target distribution of each component"""
 
-    # inhomogeneous Gaussian example
+    # inhomogeneous Gaussian
     # target = (1 / (i * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x/i) ** 2))
 
-    # inhomogeneous laplace
+    # inhomogeneous double exponential
     target = (1 / 2 * i) * np.exp(-np.abs(x / i))
 
     return target
