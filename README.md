@@ -53,6 +53,9 @@ experiment_pt.py plots line graphs for ESJD vs the swap acceptance rate of the a
 ### To Run Uniform Proposal Distribution Examples
 (Section 4.3) Run uniform_proposal_distribution.py in the main folder. This file includes running the Metropolis algorithm, generating the trace plot and histogram, and the relationship between ESJD and acceptance rate. You can modify the values of the example at the end.
 
+### To Run Inhomogeneous Target Distribution Examples
+(Section 4.5) Run inhomogeneous_target_distribution.py in the main folder. This file includes running the Metropolis algorithm, generating the trace plot and histogram, and the relationship between ESJD and acceptance rate. You can comment or uncomment codes to have different target distributions and proposal distributions.
+
 ## Directory Structure
 General classes with their attributes and methods are in the main folder. 
 - MCMCSimulation is a class for running a single MCMC simulation for generating samples from a target distribution and visualizing the various metrics and results.
