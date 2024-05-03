@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 
 
 def target_distribution(x, f):
+    """Define the target distribution as a product form (i.i.d.)"""
     if isinstance(x, int) or isinstance(x, float):
         return f(x)
     else:
@@ -13,6 +14,7 @@ def target_distribution(x, f):
 
 
 def proposal_distribution(dimension, x, proposed_scale, function):
+    """Define the double exponential proposal distribution"""
     if function == 'multivariate' and (
             isinstance(x, int) or isinstance(x, float)):
         step = np.random.laplace(0, proposed_scale, dimension)
