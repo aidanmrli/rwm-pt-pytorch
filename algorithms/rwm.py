@@ -42,11 +42,14 @@ class RandomWalkMH(MHAlgorithm):
             
         Returns:
             float: The log acceptance probability."""
+        target_density_proposed = self.target_density(proposed_state)
+        log_target_density_proposed_state = -np.inf
+        if target_density_proposed != 0:
+            log_target_density_proposed_state = np.log(target_density_proposed + 1e-300) # for numerical stability
+
         if self.symmetric:
-            log_target_density_proposed_state = np.log(self.target_density(proposed_state) + 1e-300) # for numerical stability
             return self.beta * (log_target_density_proposed_state - log_target_density_curr_state), log_target_density_proposed_state
         else:
-            log_target_density_proposed_state = np.log(self.target_density(proposed_state))
             log_target_term = self.beta * (log_target_density_proposed_state - log_target_density_curr_state)
             log_proposal_term = (np.log(normal.pdf(current_state, mean=proposed_state, 
                                                    cov=np.eye(self.dim) * (self.var))) 
