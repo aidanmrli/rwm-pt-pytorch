@@ -17,6 +17,7 @@ class MultivariateNormal(TargetDistribution):
             cov (np.ndarray): Covariance matrix of the distribution.
         """
         super().__init__(dim)  # Dimension based on mean vector size
+        self.name = "MultivariateNormal"
         if mean is None:
             mean = np.zeros(dim)
         if cov is None:
@@ -24,6 +25,12 @@ class MultivariateNormal(TargetDistribution):
         self.mean = mean
         self.cov = cov
 
+    def get_name(self):
+        """
+        Return the name of the target distribution as a string.
+        """
+        return self.name
+    
     def density_1d(self, x):
         """
         Evaluates the probability density function (PDF) at a point x. Assumes that the distribution is 1D.

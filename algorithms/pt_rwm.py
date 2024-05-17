@@ -17,7 +17,7 @@ class ParallelTemperingRWM(MHAlgorithm):
             geom_temp_spacing=False,
             swap_acceptance_rate=0.234,):
         super().__init__(dim, var, target_dist, symmetric)
-        
+        self.name = "PTrwm"
         ### counting variables
         self.num_swap_attempts = 0
         self.num_acceptances = 0    # use this to calculate acceptance rate
@@ -58,6 +58,12 @@ class ParallelTemperingRWM(MHAlgorithm):
         self.chain = self.chains[0].chain  # the first chain is the "cold" chain
         self.log_target_density_curr_state = np.ones(len(self.beta_ladder)) * -np.inf    # store the previously computed target densities
 
+    def get_name(self):
+        """
+        Return the name of the MHAlgorithm as a string.
+        """
+        return self.name
+    
     def construct_beta_ladder_iteratively(self):
         """Construct the inverse temperature ladder iteratively 
         using a simulation-based approach."""

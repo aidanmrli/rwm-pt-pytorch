@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
     simulation = MCMCSimulation(dim=dim, 
                             sigma=((1 ** 2) / (dim ** (1))),  # 2.38**2 / dim
-                            num_iterations=100000,
+                            num_iterations=1000,
                             algorithm=RandomWalkMH, # RandomWalkMH or ParallelTemperingRWM
                             target_dist=target_distribution,
                             symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution

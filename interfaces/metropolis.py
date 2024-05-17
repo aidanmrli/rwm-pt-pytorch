@@ -24,7 +24,7 @@ class MHAlgorithm:
 
     def reset(self):
         """Reset the Markov chain to the initial state."""
-        self.chain = [np.random.multivariate_normal(np.zeros(self.dim), np.eye(self.dim))]
+        self.chain = [np.zeros(self.dim)]
 
     def step(self):
         """Take a step using the Metropolis-Hastings algorithm. Must be implemented in subclass."""
@@ -37,4 +37,8 @@ class MHAlgorithm:
     def set_curr_state(self, state):
         """Set the current state of the algorithm."""
         self.chain[-1] = state
+
+    def get_name(self):
+        """Return the name of the algorithm as a string."""
+        raise NotImplementedError("Subclasses must implement the get_name method.")
 

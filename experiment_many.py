@@ -13,9 +13,9 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == "__main__":
-    dim = 100    # dimension of the target and proposal distributions
+    dim = 10    # dimension of the target and proposal distributions
     # run many simulations for different variance values
-    var_value_range = np.linspace(0.001, 3, 30)
+    var_value_range = np.linspace(0.001, 3, 5)
     num_seeds = 3
 
     # save results for plotting
@@ -31,6 +31,9 @@ if __name__ == "__main__":
     target_distribution = Hypercube(dim, left_boundary=-1, right_boundary=1)
 
 
+    ### Tune other hyperparameters here
+    num_iters=1000
+
     for var in var_value_range:
         variance = (var ** 2) / (dim ** (1))
         seed_results_acceptance = []
@@ -39,7 +42,7 @@ if __name__ == "__main__":
         for seed_val in range(num_seeds):
             simulation = MCMCSimulation(dim=dim, 
                                         sigma=variance,  # 2.38**2 / dim
-                                        num_iterations=100000,
+                                        num_iterations=num_iters,
                                         algorithm=RandomWalkMH,
                                         target_dist=target_distribution,
                                         symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution
@@ -62,19 +65,25 @@ if __name__ == "__main__":
     plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs acceptance rate (dim={dim})')
-    plt.show()
+    filename = f"images/ESJDvsAccept_{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters"
+    plt.savefig(filename)
+    # plt.show()
 
     plt.plot(var_value_range, acceptance_rates, label='Acceptance rate', marker='x')  # marker='o'
     plt.xlabel('Variance value (value^2 / dim)')
     plt.ylabel('Acceptance rate')
     plt.title(f'Acceptance rate for different variance values (dim={dim})')
-    plt.show()
+    filename = f"images/AcceptvsVar_{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters"
+    plt.savefig(filename)
+    # plt.show()
 
     plt.plot(var_value_range, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')  # marker='o'
     plt.xlabel('Variance value (value^2 / dim)')
     plt.ylabel('ESJD')
     plt.title(f'ESJD for different variance values (dim={dim})')
-    plt.show()
+    filename = f"images/ESJDvsVar_{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters"
+    plt.savefig(filename)
+    # plt.show()
 
     ### see the last histogram to see if results are consistent
     simulation.samples_histogram(dim=0)  # plot the histogram of the first dimension

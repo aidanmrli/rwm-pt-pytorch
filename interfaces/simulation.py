@@ -99,7 +99,10 @@ class MCMCSimulation:
             plt.title(f'variance = {self.algorithm.var:.3f}, acceptance rate = {self.acceptance_rate():.3f}, ESJD = {self.algorithm.pt_esjd:.5f}')
         else:
             plt.title(f'variance = {self.algorithm.var:.3f}, acceptance rate = {self.acceptance_rate():.3f}, ESJD = {self.expected_squared_jump_distance():.3f}')
-        plt.show()
+        # plt.show()
+        filename = f"images/traceplot_{self.target_dist.get_name()}_{self.algorithm.get_name()}_dim{self.algorithm.dim}_{self.num_iterations}iters"
+
+        plt.savefig(filename)
 
     def samples_histogram(self, num_bins=50, dim=0):
         """Plot a histogram of the samples overlaid with the target density for the first
@@ -132,4 +135,6 @@ class MCMCSimulation:
             plt.title(f'variance = {self.algorithm.var:.3f}, a = {self.acceptance_rate():.3f}, ESJD = {self.algorithm.pt_esjd:.5f}')
         else:
             plt.title(f'variance = {self.algorithm.var:.3f}, a = {self.acceptance_rate():.3f}, ESJD = {self.expected_squared_jump_distance():.3f}')
-        plt.show()
+        # plt.show()
+        filename = f"images/hist_{self.target_dist.get_name()}_{self.algorithm.get_name()}_dim{self.algorithm.dim}_{self.num_iterations}iters"
+        plt.savefig(filename)

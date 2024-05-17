@@ -13,6 +13,7 @@ class ThreeMixtureDistribution(TargetDistribution):
         """Initialize the multimodal distribution with three modes.
         Set the locations of the means and the covariance matrices for each mode."""
         super().__init__(dimension)
+        self.name = "ThreeMixture"
         self.means = [np.zeros(self.dim), np.zeros(self.dim), np.zeros(self.dim)]
         self.means[0][0], self.means[2][0] = -15, 15
 
@@ -24,6 +25,12 @@ class ThreeMixtureDistribution(TargetDistribution):
             self.scaling_factors = np.random.uniform(0.000001, 2, self.dim)    # Randomly sample scaling factors, must have mean 1
             for i in range(len(self.covs)):
                 self.covs[i] *= self.scaling_factors
+
+    def get_name(self):
+        """
+        Return the name of the target distribution as a string.
+        """
+        return self.name
     
     def density(self, x):
         """Compute the density of the multimodal distribution at a given point x.
@@ -59,10 +66,17 @@ class RoughCarpetDistribution(TargetDistribution):
 
     def __init__(self, dimension, scaling=False):
         super().__init__(dimension)
+        self.name = "RoughCarpet"
         self.modes = [-10, 0, 10]
         self.weights = [0.5, 0.3, 0.2]
         if scaling:  # Randomly sample scaling factors, distribution must have mean 1
             self.scaling_factors = np.random.uniform(0.000001, 2, self.dim)
+    
+    def get_name(self):
+        """
+        Return the name of the target distribution as a string.
+        """
+        return self.name
     
     def density_1d(self, x):
         """Compute the density of a multimodal 1D distribution with three modes."""

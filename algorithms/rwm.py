@@ -12,6 +12,13 @@ class RandomWalkMH(MHAlgorithm):
         self.acceptance_rate = 0
         self.log_target_density_curr_state = -np.inf    # this is the log density of the current state, used to reduce redundant computation
         self.beta = beta
+        self.name = "RWM"
+    
+    def get_name(self):
+        """
+        Return the name of the MHAlgorithm as a string.
+        """
+        return self.name
 
     def step(self):
         """Take a step using the Random Walk Metropolis-Hastings algorithm.

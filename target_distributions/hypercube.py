@@ -14,8 +14,17 @@ class Hypercube(TargetDistribution):
             dim (int): Dimension of the hypercube.
         """
         super().__init__(dim)  # Dimension based on input
+        self.name = "Hypercube"
         self.left_boundary = left_boundary
         self.right_boundary = right_boundary
+
+    
+    def get_name(self):
+        """
+        Return the name of the target distribution as a string.
+        """
+        return self.name
+
 
     def density_1d(self, x):
         """
