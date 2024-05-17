@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 if __name__ == "__main__":
     dim = 20    # dimension of the target and proposal distributions
     ### run many simulations for different variance values
-    swap_acceptance_rates_range = np.linspace(0.01, 0.8, 30)
+    swap_acceptance_rates_range = np.linspace(0.01, 0.4, 15)
     num_seeds = 3
 
     ### save results for plotting
@@ -24,9 +24,9 @@ if __name__ == "__main__":
 
     ### keep scaling factors consistent in the target density across experiments
     ### set scaling=True for random i.i.d. scaling factors for the components
-    ### choose the rough carpet or three mixture or standard multivariate normal
+    ## choose the rough carpet or three mixture or standard multivariate normal
     target_distribution = MultivariateNormal(dim)
-    # target_distribution = RoughCarpetDistribution(dim, scaling=False)
+    target_distribution = RoughCarpetDistribution(dim, scaling=False)
     # target_distribution = ThreeMixtureDistribution(dim, scaling=False)
 
     for a in swap_acceptance_rates_range:

@@ -12,19 +12,20 @@ import numpy as np
 from target_distributions import *
 
 if __name__ == "__main__":
-    dim = 30    # dimension of the target and proposal distributions
+    dim = 20    # dimension of the target and proposal distributions
     
     ### Reuse some beta ladder if you would like to save time
     # temp_beta_ladder = [1, 0.7201258143345616, 0.5351535500164732, 0.40699808631201695, 0.31168319620186075, 0.23789880207916622, 0.1726209665306218, 0.117096477032898, 0.07923549613447455, 0.01]
     
     ### choose the rough carpet or three mixture or standard multivariate normal
-    target_distribution = MultivariateNormal(dim)
+    # target_distribution = MultivariateNormal(dim)
     # target_distribution = RoughCarpetDistribution(dim, scaling=False)
     # target_distribution = ThreeMixtureDistribution(dim, scaling=False)
+    target_distribution = Hypercube(dim, left_boundary=-1, right_boundary=1)
 
     simulation = MCMCSimulation(dim=dim, 
-                            sigma=((2.38 ** 2) / (dim ** (1))),  # 2.38**2 / dim
-                            num_iterations=10000,
+                            sigma=((1 ** 2) / (dim ** (1))),  # 2.38**2 / dim
+                            num_iterations=100000,
                             algorithm=RandomWalkMH, # RandomWalkMH or ParallelTemperingRWM
                             target_dist=target_distribution,
                             symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution

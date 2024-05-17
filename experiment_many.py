@@ -13,10 +13,10 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == "__main__":
-    dim = 30    # dimension of the target and proposal distributions
+    dim = 100    # dimension of the target and proposal distributions
     # run many simulations for different variance values
-    var_value_range = np.linspace(0.001, 4, 40)
-    num_seeds = 5
+    var_value_range = np.linspace(0.001, 3, 30)
+    num_seeds = 3
 
     # save results for plotting
     acceptance_rates = []
@@ -25,9 +25,11 @@ if __name__ == "__main__":
     ### keep scaling factors consistent in the target density across experiments
     ### set scaling=True for random i.i.d. scaling factors for the components
     ### choose the rough carpet or three mixture or standard multivariate normal
-    target_distribution = MultivariateNormal(dim)
+    # target_distribution = MultivariateNormal(dim)
     # target_distribution = RoughCarpetDistribution(dim, scaling=False)
     # target_distribution = ThreeMixtureDistribution(dim, scaling=False)
+    target_distribution = Hypercube(dim, left_boundary=-1, right_boundary=1)
+
 
     for var in var_value_range:
         variance = (var ** 2) / (dim ** (1))
