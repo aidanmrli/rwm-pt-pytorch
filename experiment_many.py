@@ -13,9 +13,9 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == "__main__":
-    dim = 10    # dimension of the target and proposal distributions
+    dim = 100    # dimension of the target and proposal distributions
     # run many simulations for different variance values
-    var_value_range = np.linspace(0.001, 3, 5)
+    var_value_range = np.linspace(0.3, 1.0, 50)
     num_seeds = 3
 
     # save results for plotting
