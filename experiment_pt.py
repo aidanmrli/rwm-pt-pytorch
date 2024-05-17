@@ -68,6 +68,7 @@ if __name__ == "__main__":
     plt.title(f'ESJD vs swap acceptance rate (dim={dim})')
     filename = f"images/ESJDvsSwapAcceptActual_{target_distribution.get_name()}_PTrwm_dim{dim}_{num_iters}iters"
     plt.savefig(filename)
+    plt.clf()
     # plt.show()
 
     ### with the desired swap acceptance rate when the ladder was constructed
@@ -77,6 +78,7 @@ if __name__ == "__main__":
     plt.title(f'ESJD vs swap acceptance rate (dim={dim})')
     filename = f"images/ESJDvsSwapAcceptConstr_{target_distribution.get_name()}_PTrwm_dim{dim}_{num_iters}iters"
     plt.savefig(filename)
+    plt.clf()
     # plt.show()
 
     ### see the last histogram to see if results are consistent

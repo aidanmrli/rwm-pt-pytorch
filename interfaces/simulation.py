@@ -103,6 +103,7 @@ class MCMCSimulation:
         filename = f"images/traceplot_{self.target_dist.get_name()}_{self.algorithm.get_name()}_dim{self.algorithm.dim}_{self.num_iterations}iters"
 
         plt.savefig(filename)
+        plt.clf()
 
     def samples_histogram(self, num_bins=50, dim=0):
         """Plot a histogram of the samples overlaid with the target density for the first
@@ -138,3 +139,4 @@ class MCMCSimulation:
         # plt.show()
         filename = f"images/hist_{self.target_dist.get_name()}_{self.algorithm.get_name()}_dim{self.algorithm.dim}_{self.num_iterations}iters"
         plt.savefig(filename)
+        plt.clf()

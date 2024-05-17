@@ -67,6 +67,7 @@ if __name__ == "__main__":
     plt.title(f'ESJD vs acceptance rate (dim={dim})')
     filename = f"images/ESJDvsAccept_{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters"
     plt.savefig(filename)
+    plt.clf()
     # plt.show()
 
     plt.plot(var_value_range, acceptance_rates, label='Acceptance rate', marker='x')  # marker='o'
@@ -75,6 +76,7 @@ if __name__ == "__main__":
     plt.title(f'Acceptance rate for different variance values (dim={dim})')
     filename = f"images/AcceptvsVar_{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters"
     plt.savefig(filename)
+    plt.clf()
     # plt.show()
 
     plt.plot(var_value_range, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')  # marker='o'
@@ -83,6 +85,7 @@ if __name__ == "__main__":
     plt.title(f'ESJD for different variance values (dim={dim})')
     filename = f"images/ESJDvsVar_{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters"
     plt.savefig(filename)
+    plt.clf()
     # plt.show()
 
     ### see the last histogram to see if results are consistent
