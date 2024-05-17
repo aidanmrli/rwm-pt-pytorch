@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
 
     ### Tune other hyperparameters here
-    num_iters=1000
+    num_iters=100000
 
     for var in var_value_range:
         variance = (var ** 2) / (dim ** (1))
