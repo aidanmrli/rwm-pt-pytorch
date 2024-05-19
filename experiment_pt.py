@@ -10,6 +10,7 @@ from algorithms import *
 import numpy as np
 from target_distributions import *
 import matplotlib.pyplot as plt
+import json
 
 
 if __name__ == "__main__":
@@ -63,6 +64,15 @@ if __name__ == "__main__":
     print(f"(Actual) Swap acceptance rate corresponding to maximum ESJD: {acceptance_rates[np.argmax(expected_squared_jump_distances)]}")
     print(f"(Construction) Swap acceptance rate value corresponding to maximum ESJD: {swap_acceptance_rates_range[np.argmax(expected_squared_jump_distances)]}")
     
+    ### save the computed ESJDs, acceptance rates, and variances to a file
+    data = {
+        'expected_squared_jump_distances': expected_squared_jump_distances,
+        'acceptance_rates': acceptance_rates,
+        'swap_acceptance_rates_range': swap_acceptance_rates_range
+    }
+    with open(f"data/{target_distribution.get_name()}_PTrwm_dim{dim}_{num_iters}iters.json", "w") as file:
+        json.dump(data, file)
+
     ### plot results
     ### with the actual swap acceptance rate of the simulation
     plt.plot(acceptance_rates, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   

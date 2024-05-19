@@ -10,12 +10,13 @@ from algorithms import *
 import numpy as np
 from target_distributions import *
 import matplotlib.pyplot as plt
+import json  # for saving values
 
 
 if __name__ == "__main__":
     dim = 10    # dimension of the target and proposal distributions
     # run many simulations for different variance values
-    var_value_range = np.linspace(0.0001, 8.0, 50)
+    var_value_range = np.linspace(0.000001, 0.9, 40)
     num_seeds = 3
 
     # save results for plotting
@@ -29,8 +30,8 @@ if __name__ == "__main__":
     # target_distribution = RoughCarpetDistribution(dim, scaling=False)
     # target_distribution = ThreeMixtureDistribution(dim, scaling=False)
     # target_distribution = Hypercube(dim, left_boundary=-1, right_boundary=1)
-    target_distribution = IIDGamma(dim, shape=2, scale=3)
-    # target_distribution = IIDBeta(dim, alpha=2, beta=3)
+    # target_distribution = IIDGamma(dim, shape=2, scale=3)
+    target_distribution = IIDBeta(dim, alpha=2, beta=3)
 
     ### Tune other hyperparameters here
     num_iters=100000
@@ -61,6 +62,15 @@ if __name__ == "__main__":
     print(f"Acceptance rate corresponding to maximum ESJD: {acceptance_rates[np.argmax(expected_squared_jump_distances)]}")
     print(f"Variance value corresponding to maximum ESJD: {var_value_range[np.argmax(expected_squared_jump_distances)]}")
     
+    ### save the computed ESJDs, acceptance rates, and variances to a file
+    data = {
+        'expected_squared_jump_distances': expected_squared_jump_distances,
+        'acceptance_rates': acceptance_rates,
+        'var_value_range': var_value_range
+    }
+    with open(f"data/{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters.json", "w") as file:
+        json.dump(data, file)
+
     ### plot results
     plt.plot(acceptance_rates, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   
     plt.xlabel('acceptance rate')
