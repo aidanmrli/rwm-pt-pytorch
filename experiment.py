@@ -21,11 +21,13 @@ if __name__ == "__main__":
     # target_distribution = MultivariateNormal(dim)
     # target_distribution = RoughCarpetDistribution(dim, scaling=False)
     # target_distribution = ThreeMixtureDistribution(dim, scaling=False)
-    target_distribution = Hypercube(dim, left_boundary=-1, right_boundary=1)
+    # target_distribution = Hypercube(dim, left_boundary=-1, right_boundary=1)
+    # target_distribution = IIDGamma(dim, shape=2, scale=3)
+    target_distribution = IIDBeta(dim, alpha=2, beta=5)
 
     simulation = MCMCSimulation(dim=dim, 
-                            sigma=((1 ** 2) / (dim ** (1))),  # 2.38**2 / dim
-                            num_iterations=1000,
+                            sigma=((0.5) / (dim ** (1))),  # 2.38**2 / dim
+                            num_iterations=100000,
                             algorithm=RandomWalkMH, # RandomWalkMH or ParallelTemperingRWM
                             target_dist=target_distribution,
                             symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution
@@ -37,5 +39,5 @@ if __name__ == "__main__":
     print(f"Acceptance rate: {simulation.acceptance_rate():.3f}")
     print(f"Expected squared jump distance: {simulation.expected_squared_jump_distance():.3f}")
 
-    simulation.samples_histogram(dim=0)    # plot the histogram of the first dimension
-    simulation.traceplot(single_dim=True)   # single_dim=True to plot only the first dimension
+    simulation.samples_histogram(axis=0, show=True)    # plot the histogram of the first dimension
+    simulation.traceplot(single_dim=True, show=True)   # single_dim=True to plot only the first dimension

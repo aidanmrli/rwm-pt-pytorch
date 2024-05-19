@@ -16,7 +16,7 @@ class MHAlgorithm:
         self.dim = dim
         self.var = var
         self.target_dist = target_dist
-        self.chain = [np.zeros(self.dim)]
+        self.chain = [np.random.random(self.dim)]
         self.symmetric = symmetric
         self.num_acceptances = 0    # use this to calculate acceptance rate
         self.acceptance_rate = 0
@@ -24,7 +24,7 @@ class MHAlgorithm:
 
     def reset(self):
         """Reset the Markov chain to the initial state."""
-        self.chain = [np.zeros(self.dim)]
+        self.chain = [self.chain[0]]
 
     def step(self):
         """Take a step using the Metropolis-Hastings algorithm. Must be implemented in subclass."""

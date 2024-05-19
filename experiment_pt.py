@@ -28,6 +28,9 @@ if __name__ == "__main__":
     target_distribution = MultivariateNormal(dim)
     target_distribution = RoughCarpetDistribution(dim, scaling=False)
     # target_distribution = ThreeMixtureDistribution(dim, scaling=False)
+    # TODO: WORK IN PROGRESS target_distribution = Hypercube(dim, left_boundary=-1, right_boundary=1)
+    # target_distribution = IIDGamma(dim, shape=2, scale=3)
+    # target_distribution = IIDBeta(dim, alpha=2, beta=3)
 
     ### Tune other hyperparameters here
     # algo=ParallelTemperingRWM
@@ -82,6 +85,6 @@ if __name__ == "__main__":
     # plt.show()
 
     ### see the last histogram to see if results are consistent
-    simulation.samples_histogram(dim=0)  # plot the histogram of the first dimension
+    simulation.samples_histogram(axis=0)  # plot the histogram of the first dimension
     simulation.traceplot(single_dim=True)   # single_dim=True to plot only the first dimension
 
