@@ -14,9 +14,9 @@ import json  # for saving values
 
 
 if __name__ == "__main__":
-    dim = 10    # dimension of the target and proposal distributions
+    dim = 5    # dimension of the target and proposal distributions
     # run many simulations for different variance values
-    var_value_range = np.linspace(0.000001, 0.9, 40)
+    var_value_range = np.linspace(0.000001, 2.0, 40)
     num_seeds = 3
 
     # save results for plotting
@@ -29,14 +29,16 @@ if __name__ == "__main__":
     # target_distribution = MultivariateNormal(dim)
     # target_distribution = RoughCarpetDistribution(dim, scaling=False)
     # target_distribution = ThreeMixtureDistribution(dim, scaling=False)
-    # target_distribution = Hypercube(dim, left_boundary=-1, right_boundary=1)
+    target_distribution = Hypercube(dim, left_boundary=-1, right_boundary=1)
     # target_distribution = IIDGamma(dim, shape=2, scale=3)
-    target_distribution = IIDBeta(dim, alpha=2, beta=3)
+    # target_distribution = IIDBeta(dim, alpha=2, beta=3)
 
     ### Tune other hyperparameters here
     num_iters=100000
-
-    for var in var_value_range:
+    
+    for i in range(len(var_value_range)):
+        var = var_value_range[i]
+        print(f"Variance {i + 1} out of {len(var_value_range)}")
         variance = (var ** 2) / (dim ** (1))
         seed_results_acceptance = []
         seed_results_esjd = []
@@ -66,7 +68,7 @@ if __name__ == "__main__":
     data = {
         'expected_squared_jump_distances': expected_squared_jump_distances,
         'acceptance_rates': acceptance_rates,
-        'var_value_range': var_value_range
+        'var_value_range': var_value_range.tolist()
     }
     with open(f"data/{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters.json", "w") as file:
         json.dump(data, file)

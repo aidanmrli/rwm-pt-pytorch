@@ -35,9 +35,10 @@ if __name__ == "__main__":
 
     ### Tune other hyperparameters here
     # algo=ParallelTemperingRWM
-    num_iters=1000
-
-    for a in swap_acceptance_rates_range:
+    num_iters=100000
+    for i in range(len(swap_acceptance_rates_range)):
+        a = swap_acceptance_rates_range[i]
+        print(f"Temperature spacing {i + 1} out of {len(swap_acceptance_rates_range)}")
         seed_results_acceptance = []
         seed_results_esjd = []
 
@@ -68,7 +69,7 @@ if __name__ == "__main__":
     data = {
         'expected_squared_jump_distances': expected_squared_jump_distances,
         'acceptance_rates': acceptance_rates,
-        'swap_acceptance_rates_range': swap_acceptance_rates_range
+        'swap_acceptance_rates_range': swap_acceptance_rates_range.tolist()
     }
     with open(f"data/{target_distribution.get_name()}_PTrwm_dim{dim}_{num_iters}iters.json", "w") as file:
         json.dump(data, file)
