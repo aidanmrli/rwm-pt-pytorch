@@ -11,8 +11,12 @@ def get_target_distribution(name, dim):
         return MultivariateNormal(dim)
     elif name == "RoughCarpet":
         return RoughCarpetDistribution(dim, scaling=False)
+    elif name == "RoughCarpetScaled":
+        return RoughCarpetDistribution(dim, scaling=True)   # inhomogeneous scaling
     elif name == "ThreeMixture":
         return ThreeMixtureDistribution(dim, scaling=False)
+    elif name == "ThreeMixtureScaled":
+        return ThreeMixtureDistribution(dim, scaling=True)
     elif name == "Hypercube":
         return Hypercube(dim, left_boundary=-1, right_boundary=1)
     elif name == "IIDGamma":

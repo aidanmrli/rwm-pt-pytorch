@@ -23,4 +23,5 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Run the Python script with the parsed arguments
-python3 experiment_RWM.py --dim "$DIM" --var_max "$VAR_MAX" --target "$TARGET" --num_iters "$NUM_ITERS" --init_seed "$SEED" --num_seeds "$NUM_SEEDS"
+# python3 experiment_RWM.py --dim "$DIM" --var_max "$VAR_MAX" --target "$TARGET" --num_iters "$NUM_ITERS" --init_seed "$SEED" --num_seeds "$NUM_SEEDS"
+python3 experiment_RWM.py --dim 20 --var_max 1.5 --target RoughCarpetScaled --num_iters 100000 --seed 0 --num_seeds 10

@@ -67,9 +67,9 @@ class RoughCarpetDistribution(TargetDistribution):
     def __init__(self, dimension, scaling=False):
         super().__init__(dimension)
         self.name = "RoughCarpet"
-        self.modes = [-10, 0, 10]
+        self.modes = [-5, 0, 5]
         self.weights = [0.5, 0.3, 0.2]
-        if scaling:  # Randomly sample scaling factors, distribution must have mean 1
+        if scaling:  # Randomly sample scaling factors, distribution must have expectation 1
             self.scaling_factors = np.random.uniform(0.000001, 2, self.dim)
     
     def get_name(self):
