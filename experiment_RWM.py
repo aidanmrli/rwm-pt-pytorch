@@ -111,6 +111,3 @@ if __name__ == "__main__":
     filename = f"images/ESJDvsVar_{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters"
     plt.savefig(filename)
     plt.clf()
-
-    simulation.samples_histogram(axis=0)
-    simulation.traceplot(single_dim=True)
