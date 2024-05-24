@@ -89,7 +89,7 @@ class ParallelTemperingRWM(MHAlgorithm):
                 ## total_iterations samples and calculating the swap probability 
                 ## for each sample
                 burn_in = 0
-                total_iterations = 1000    # set this to a large number.
+                total_iterations = 10000    # set this to a large number.
                 total_samples = total_iterations - burn_in
                 for chain, beta in chains:
                     for _ in range(total_iterations):

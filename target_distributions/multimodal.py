@@ -14,8 +14,10 @@ class ThreeMixtureDistribution(TargetDistribution):
         Set the locations of the means and the covariance matrices for each mode."""
         super().__init__(dimension)
         self.name = "ThreeMixture"
+        if scaling:
+            self.name = "ThreeMixtureScaled"
         self.means = [np.zeros(self.dim), np.zeros(self.dim), np.zeros(self.dim)]
-        self.means[0][0], self.means[2][0] = -15, 15
+        self.means[0][0], self.means[2][0] = -5, 5
 
         ### Choose which covariance matrix to use!
         # self.covs = [np.eye(self.dim) / np.sqrt(self.dim), np.eye(self.dim) / np.sqrt(self.dim), np.eye(self.dim) / np.sqrt(self.dim)]
@@ -67,6 +69,8 @@ class RoughCarpetDistribution(TargetDistribution):
     def __init__(self, dimension, scaling=False):
         super().__init__(dimension)
         self.name = "RoughCarpet"
+        if scaling:
+            self.name = "RoughCarpetScaled"
         self.modes = [-5, 0, 5]
         self.weights = [0.5, 0.3, 0.2]
         if scaling:  # Randomly sample scaling factors, distribution must have expectation 1
