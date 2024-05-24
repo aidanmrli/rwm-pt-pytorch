@@ -85,14 +85,14 @@ if __name__ == "__main__":
         'acceptance_rates': acceptance_rates,
         'var_value_range': var_value_range.tolist()
     }
-    with open(f"data/{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters.json", "w") as file:
+    with open(f"data/{target_distribution.get_name()}_RWM_dim{dim}_seed{args.init_seed}_{num_iters}iters.json", "w") as file:
         json.dump(data, file)
 
     plt.plot(acceptance_rates, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   
     plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs acceptance rate (dim={dim})')
-    filename = f"images/ESJDvsAccept_{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters"
+    filename = f"images/ESJDvsAccept_{target_distribution.get_name()}_RWM_dim{dim}_seed{args.init_seed}_{num_iters}iters"
     plt.savefig(filename)
     plt.clf()
 
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     plt.xlabel('Variance value (value^2 / dim)')
     plt.ylabel('Acceptance rate')
     plt.title(f'Acceptance rate for different variance values (dim={dim})')
-    filename = f"images/AcceptvsVar_{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters"
+    filename = f"images/AcceptvsVar_{target_distribution.get_name()}_RWM_dim{dim}_seed{args.init_seed}_{num_iters}iters"
     plt.savefig(filename)
     plt.clf()
 
@@ -108,6 +108,6 @@ if __name__ == "__main__":
     plt.xlabel('Variance value (value^2 / dim)')
     plt.ylabel('ESJD')
     plt.title(f'ESJD for different variance values (dim={dim})')
-    filename = f"images/ESJDvsVar_{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters"
+    filename = f"images/ESJDvsVar_{target_distribution.get_name()}_RWM_dim{dim}_seed{args.init_seed}_{num_iters}iters"
     plt.savefig(filename)
     plt.clf()

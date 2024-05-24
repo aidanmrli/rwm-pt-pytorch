@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     for i in range(len(swap_acceptance_rates_range)):
         a = swap_acceptance_rates_range[i]
-        print(f"Temperature spacing {i + 1} out of {len(swap_acceptance_rates_range)}")
+        print(f"{target_distribution.get_name()} dim{dim}: Temperature spacing {i + 1} out of {len(swap_acceptance_rates_range)}")
         seed_results_acceptance = []
         seed_results_esjd = []
         constructed_beta_ladder = None
@@ -67,26 +67,26 @@ if __name__ == "__main__":
     max_actual_acceptance_rate = acceptance_rates[max_esjd_index]
     max_constr_acceptance_rate = swap_acceptance_rates_range[max_esjd_index]
 
-    print(f"Maximum ESJD: {max_esjd}")
-    print(f"(Actual) Swap acceptance rate corresponding to maximum ESJD: {max_actual_acceptance_rate}")
-    print(f"(Construction) Swap acceptance rate value corresponding to maximum ESJD: {max_constr_acceptance_rate}")
+    print(f"{target_distribution.get_name()} dim{dim} Maximum ESJD: {max_esjd}")
+    print(f"{target_distribution.get_name()} dim{dim} (Actual) Swap acceptance rate corresponding to maximum ESJD: {max_actual_acceptance_rate}")
+    print(f"{target_distribution.get_name()} dim{dim} (Construction) Swap acceptance rate value corresponding to maximum ESJD: {max_constr_acceptance_rate}")
 
     data = {
-        'expected_squared_jump_distances': expected_squared_jump_distances,
-        'acceptance_rates': acceptance_rates,
-        'swap_acceptance_rates_range': swap_acceptance_rates_range.tolist(),
         'max_esjd': max_esjd,
         'max_actual_acceptance_rate': max_actual_acceptance_rate,
-        'max_constr_acceptance_rate': max_constr_acceptance_rate
+        'max_constr_acceptance_rate': max_constr_acceptance_rate,
+        'expected_squared_jump_distances': expected_squared_jump_distances,
+        'acceptance_rates': acceptance_rates,
+        'swap_acceptance_rates_range': swap_acceptance_rates_range.tolist()
     }
-    with open(f"data/{target_distribution.get_name()}_PTrwm_dim{dim}_{num_iters}iters.json", "w") as file:
+    with open(f"data/{target_distribution.get_name()}_PTrwm_dim{dim}_seed{args.init_seed}_{num_iters}iters.json", "w") as file:
         json.dump(data, file)
 
     plt.plot(acceptance_rates, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   
     plt.xlabel('swap acceptance rate (actual)')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs swap acceptance rate (dim={dim})')
-    filename = f"images/ESJDvsSwapAcceptActual_{target_distribution.get_name()}_PTrwm_dim{dim}_{num_iters}iters"
+    filename = f"images/ESJDvsSwapAcceptActual_{target_distribution.get_name()}_PTrwm_dim{dim}_seed{args.init_seed}_{num_iters}iters"
     plt.savefig(filename)
     plt.clf()
 
@@ -94,6 +94,6 @@ if __name__ == "__main__":
     plt.xlabel('swap acceptance rate (construction)')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs swap acceptance rate (dim={dim})')
-    filename = f"images/ESJDvsSwapAcceptConstr_{target_distribution.get_name()}_PTrwm_dim{dim}_{num_iters}iters"
+    filename = f"images/ESJDvsSwapAcceptConstr_{target_distribution.get_name()}_PTrwm_dim{dim}_seed{args.init_seed}_{num_iters}iters"
     plt.savefig(filename)
     plt.clf()
