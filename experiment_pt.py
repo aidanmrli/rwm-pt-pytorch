@@ -22,13 +22,13 @@ if __name__ == "__main__":
     parser.add_argument("--swap_accept_max", type=float, default=0.6, help="Upper bound of the swap acceptance rate range")
     parser.add_argument("--target", type=str, default="RoughCarpet", help="Target density distribution")
     parser.add_argument("--num_iters", type=int, default=100000, help="Number of iterations for the MCMC simulation")
-    parser.add_argument("--seed", type=int, default=0, help="Starting seed value")
+    parser.add_argument("--init_seed", type=int, default=0, help="Starting seed value")
     parser.add_argument("--num_seeds", type=int, default=5, help="Number of seeds to use in the simulations")
 
     args = parser.parse_args()
 
     dim = args.dim
-    swap_acceptance_rates_range = np.linspace(0.01, args.swap_accept_max, 2)
+    swap_acceptance_rates_range = np.linspace(0.01, args.swap_accept_max, 40)
     num_seeds = args.num_seeds
     num_iters = args.num_iters
     target_distribution = get_target_distribution(args.target, dim)
@@ -41,8 +41,9 @@ if __name__ == "__main__":
         print(f"Temperature spacing {i + 1} out of {len(swap_acceptance_rates_range)}")
         seed_results_acceptance = []
         seed_results_esjd = []
+        constructed_beta_ladder = None
 
-        for seed_val in range(args.seed, args.seed + num_seeds):
+        for seed_val in range(args.init_seed, args.init_seed + num_seeds):
             simulation = MCMCSimulation(dim=dim, 
                                         sigma=((2.38 ** 2) / (dim ** (1))),  # 2.38**2 / dim
                                         num_iterations=num_iters,
@@ -50,8 +51,9 @@ if __name__ == "__main__":
                                         target_dist=target_distribution,
                                         symmetric=True,  # whether to do Metropolis or Metropolis-Hastings: symmetric proposal distribution
                                         seed=seed_val,
-                                        beta_ladder=None,
+                                        beta_ladder=constructed_beta_ladder,
                                         swap_acceptance_rate=a)
+            constructed_beta_ladder = simulation.algorithm.beta_ladder
             
             chain = simulation.generate_samples()
             seed_results_acceptance.append(simulation.acceptance_rate())
