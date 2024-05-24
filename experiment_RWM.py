@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     for i in range(len(var_value_range)):
         var = var_value_range[i]
-        print(f"Variance {i + 1} out of {len(var_value_range)}")
+        print(f"{target_distribution.get_name()}: Variance {i + 1} out of {len(var_value_range)}")
         variance = (var ** 2) / (dim ** (1))
         seed_results_acceptance = []
         seed_results_esjd = []
@@ -78,12 +78,12 @@ if __name__ == "__main__":
     print(f"Variance value corresponding to maximum ESJD: {max_variance_value}")
 
     data = {
-        'expected_squared_jump_distances': expected_squared_jump_distances,
-        'acceptance_rates': acceptance_rates,
-        'var_value_range': var_value_range.tolist(),
         'max_esjd': max_esjd,
         'max_acceptance_rate': max_acceptance_rate,
-        'max_variance_value': max_variance_value
+        'max_variance_value': max_variance_value,
+        'expected_squared_jump_distances': expected_squared_jump_distances,
+        'acceptance_rates': acceptance_rates,
+        'var_value_range': var_value_range.tolist()
     }
     with open(f"data/{target_distribution.get_name()}_RWM_dim{dim}_{num_iters}iters.json", "w") as file:
         json.dump(data, file)
