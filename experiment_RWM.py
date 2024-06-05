@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     for i in range(len(var_value_range)):
         var = var_value_range[i]
-        print(f"{target_distribution.get_name()}: Variance {i + 1} out of {len(var_value_range)}")
+        print(f"{target_distribution.get_name()} (d={dim}): Variance {i + 1} out of {len(var_value_range)}")
         variance = (var ** 2) / (dim ** (1))
         seed_results_acceptance = []
         seed_results_esjd = []
