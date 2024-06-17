@@ -1,4 +1,5 @@
 # montecarlo
+(ReadMe needs to be updated with latest experimental framework)
 A modular high-level library for running high-dimensional Metropolis algorithms across a variety of scaling and tempering conditions.
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
