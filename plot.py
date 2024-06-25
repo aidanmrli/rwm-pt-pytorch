@@ -29,7 +29,10 @@ def create_plot(data, filename):
     # plt.figure(figsize=(10, 6))
     
     # Plot ESJD vs acceptance rate
-    plt.plot(data['acceptance_rates'], data['expected_squared_jump_distances'], 
+    x_range = data['acceptance_rates']
+    if 'swap_acceptance_rates_range' in data:
+        x_range = data['swap_acceptance_rates_range']
+    plt.plot(x_range, data['expected_squared_jump_distances'], 
             marker='x')
     
     plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
