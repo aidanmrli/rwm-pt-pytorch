@@ -88,15 +88,17 @@ if __name__ == "__main__":
     with open(f"data/{target_distribution.get_name()}_RWM_dim{dim}_seed{args.init_seed}_{num_iters}iters.json", "w") as file:
         json.dump(data, file)
 
-    plt.plot(acceptance_rates, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   
-    plt.axvline(x=0.234, color='red', linestyle=':', label='x = 0.234')
-    plt.text(0.234, plt.gca().get_ylim()[0], '0.234', ha='center', va='top')
+    plt.plot(acceptance_rates, expected_squared_jump_distances, marker='x')   
+    plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
     plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs acceptance rate (dim={dim})')
-    filename = f"images/ESJDvsAccept_{target_distribution.get_name()}_RWM_dim{dim}_seed{args.init_seed}_{num_iters}iters"
-    plt.savefig(filename)
+    plt.legend()
+    output_filename = f"images/ESJD_vs_acceptance_rate_{target_distribution.get_name()}_RWM_dim{dim}_seed{args.init_seed}_{num_iters}iters"
+    plt.savefig(output_filename, dpi=300, bbox_inches='tight')
     plt.clf()
+    plt.close()
+    print(f"Plot created and saved as '{output_filename}'")
 
     plt.plot(var_value_range, acceptance_rates, label='Acceptance rate', marker='x')
     plt.xlabel('Variance value (value^2 / dim)')

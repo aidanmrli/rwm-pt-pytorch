@@ -82,22 +82,25 @@ if __name__ == "__main__":
     with open(f"data/{target_distribution.get_name()}_PTrwm_dim{dim}_seed{args.init_seed}_{num_iters}iters.json", "w") as file:
         json.dump(data, file)
 
-    plt.plot(acceptance_rates, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   
-    plt.axvline(x=0.234, color='red', linestyle=':', label='x = 0.234')
-    plt.text(0.234, plt.gca().get_ylim()[0], '0.234', ha='center', va='top')
-    plt.xlabel('swap acceptance rate (actual)')
-    plt.ylabel('ESJD')
-    plt.title(f'ESJD vs swap acceptance rate (dim={dim})')
-    filename = f"images/ESJDvsSwapAcceptActual_{target_distribution.get_name()}_PTrwm_dim{dim}_seed{args.init_seed}_{num_iters}iters"
-    plt.savefig(filename)
-    plt.clf()
 
-    plt.plot(swap_acceptance_rates_range, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')
-    plt.axvline(x=0.234, color='red', linestyle=':', label='x = 0.234')
-    plt.text(0.234, plt.gca().get_ylim()[0], '0.234', ha='center', va='top')
+    plt.plot(swap_acceptance_rates_range, expected_squared_jump_distances, marker='x')
+    plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
     plt.xlabel('swap acceptance rate (construction)')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs swap acceptance rate (dim={dim})')
     filename = f"images/ESJDvsSwapAcceptConstr_{target_distribution.get_name()}_PTrwm_dim{dim}_seed{args.init_seed}_{num_iters}iters"
     plt.savefig(filename)
     plt.clf()
+    plt.close()
+    print(f"Plot created and saved as '{filename}'")
+
+    plt.plot(acceptance_rates, expected_squared_jump_distances, marker='x')   
+    plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
+    plt.xlabel('swap acceptance rate (actual)')
+    plt.ylabel('ESJD')
+    plt.title(f'ESJD vs swap acceptance rate (dim={dim})')
+    filename = f"images/ESJDvsSwapAcceptActual_{target_distribution.get_name()}_PTrwm_dim{dim}_seed{args.init_seed}_{num_iters}iters"
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    plt.clf()
+    plt.close()
+    print(f"Plot created and saved as '{filename}'")
