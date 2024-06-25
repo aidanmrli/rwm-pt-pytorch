@@ -28,12 +28,12 @@ def get_target_distribution(name, dim):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run RWM simulations with various parameters")
-    parser.add_argument("--dim", type=int, default=5, help="Dimension of the target and proposal distributions")
+    parser.add_argument("--dim", type=int, default=20, help="Dimension of the target and proposal distributions")
     parser.add_argument("--var_max", type=float, default=2.0, help="Upper bound of the variance value range")
     parser.add_argument("--target", type=str, default="Hypercube", help="Target density distribution")
     parser.add_argument("--num_iters", type=int, default=100000, help="Number of iterations for each MCMC simulation")
     parser.add_argument("--init_seed", type=int, default=0, help="Starting seed value")
-    parser.add_argument("--num_seeds", type=int, default=3, help="Number of seeds to use in the simulations")
+    parser.add_argument("--num_seeds", type=int, default=5, help="Number of seeds to use in the simulations")
 
     args = parser.parse_args()
 
