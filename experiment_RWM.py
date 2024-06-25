@@ -89,6 +89,8 @@ if __name__ == "__main__":
         json.dump(data, file)
 
     plt.plot(acceptance_rates, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')   
+    plt.axvline(x=0.234, color='red', linestyle=':', label='x = 0.234')
+    plt.text(0.234, plt.gca().get_ylim()[0], '0.234', ha='center', va='top')
     plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs acceptance rate (dim={dim})')
