@@ -57,8 +57,9 @@ def process_directory(directory_path):
             except Exception as e:
                 print(f"Error processing {filename}: {str(e)}")
 
+
 # Main execution
 if __name__ == "__main__":
     # Replace 'data_directory' with the path to your directory containing JSON files
-    data_directory = 'data/MultivariateNormal_Uniform_RWM_dim2_100000iters.json'
+    data_directory = 'data/data_directory'
     process_directory(data_directory)
