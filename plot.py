@@ -10,31 +10,31 @@ import json
 def read_json(file_path):
     with open(file_path, 'r') as file:
         return json.load(file)
-    
+
 
 def extract_dimension(filename):
     # Split the filename by underscores
     parts = filename.split('_')
-    
+
     # Find the part that starts with 'dim'
     for part in parts:
         if part.startswith('dim'):
             # Extract the number after 'dim'
             dim = int(part[3:])
             return dim
-        
+
 # Function to create the plot
 def create_plot(data, filename):
     dim = extract_dimension(filename)
     # plt.figure(figsize=(10, 6))
-    
+
     # Plot ESJD vs acceptance rate
     x_range = data['acceptance_rates']
     if 'swap_acceptance_rates_range' in data:
         x_range = data['swap_acceptance_rates_range']
-    plt.plot(x_range, data['expected_squared_jump_distances'], 
+    plt.plot(x_range, data['expected_squared_jump_distances'],
             marker='x')
-    
+
     plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
     plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
@@ -60,5 +60,5 @@ def process_directory(directory_path):
 # Main execution
 if __name__ == "__main__":
     # Replace 'data_directory' with the path to your directory containing JSON files
-    data_directory = 'data/'
+    data_directory = 'data/MultivariateNormal_Uniform_RWM_dim2_100000iters.json'
     process_directory(data_directory)
