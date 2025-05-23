@@ -1,6 +1,6 @@
 # Target Distributions Directory
 
-This directory `montecarlo/target_distributions/` implements various target probability distributions for Monte Carlo sampling algorithms. Each distribution class inherits from the `TargetDistribution` interface defined in `montecarlo/interfaces/target.py` and provides implementations for density evaluation and sample generation.
+This directory `target_distributions/` implements various target probability distributions for Monte Carlo sampling algorithms. Each distribution class inherits from the `TargetDistribution` interface defined in `montecarlo/interfaces/target.py` and provides implementations for density evaluation and sample generation.
 
 ## Overview
 

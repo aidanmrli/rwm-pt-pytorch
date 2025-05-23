@@ -1,6 +1,6 @@
 # Interfaces Directory
 
-This directory `montecarlo/interfaces/` contains abstract base classes and interfaces that define the core contracts for the Monte Carlo simulation framework. These interfaces ensure consistent APIs across different implementations of target distributions, MCMC algorithms, and simulation controllers.
+This directory `interfaces/` contains abstract base classes and interfaces that define the core contracts for the Monte Carlo simulation framework. These interfaces ensure consistent APIs across different implementations of target distributions, MCMC algorithms, and simulation controllers.
 
 ## Overview
 

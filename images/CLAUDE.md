@@ -1,6 +1,6 @@
 # Images Directory
 
-This directory `montecarlo/images/` contains visualization outputs from MCMC algorithm performance studies. The plots provide graphical analysis of the relationship between algorithm parameters (proposal variance, acceptance rates) and performance metrics (ESJD), enabling visual assessment of optimal scaling properties.
+This directory `images/` contains visualization outputs from MCMC algorithm performance studies. The plots provide graphical analysis of the relationship between algorithm parameters (proposal variance, acceptance rates) and performance metrics (ESJD), enabling visual assessment of optimal scaling properties.
 
 ## Overview
 

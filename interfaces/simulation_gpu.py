@@ -87,7 +87,11 @@ class MCMCSimulation_GPU:
 
     def has_run(self):
         """Return whether the algorithm has been run."""
-        return len(self.algorithm.chain) > 1
+        # Check if using pre-allocated chain
+        if hasattr(self.algorithm, 'pre_allocated_chain') and self.algorithm.pre_allocated_chain is not None:
+            return self.algorithm.chain_index > 1
+        else:
+            return len(self.algorithm.chain) > 1
 
     def generate_samples(self, use_batch_processing=True, progress_bar=True):
         """

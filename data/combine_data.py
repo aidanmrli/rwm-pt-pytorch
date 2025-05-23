@@ -1,3 +1,12 @@
+""" 
+This script is used to combine two JSON data files into one.
+It is used to combine the data from the two seeds into one file.
+The data is combined by averaging the values at each index from the two lists.
+The data is saved to a new file.
+The new file is named with the seed of the first file and the seed of the second file.
+The new file is saved in the data folder.
+The new file is named with the seed of the first file and the seed of the second file.
+"""
 import json
 import numpy as np
 import os

@@ -5,19 +5,18 @@ from interfaces import MHAlgorithm, TargetDistribution
 import warnings
 
 class RandomWalkMH_GPU(MHAlgorithm):
-    """GPU-accelerated vectorized implementation of Random Walk Metropolis-Hastings algorithm.
+    """GPU-accelerated implementation of Random Walk Metropolis-Hastings algorithm.
     
-    This implementation provides significant performance improvements through:
-    - Batch processing of multiple proposals
-    - GPU acceleration via PyTorch
-    - Pre-allocated memory for chains
-    - Vectorized density evaluations
-    - Reduced redundant computations
+    This implementation provides GPU acceleration for true standard RWM through:
+    - GPU acceleration for density evaluations
+    - GPU memory pre-allocation for chains
+    - GPU tensor operations for proposals and acceptances
+    - Optional batch processing for multiple independent proposals (non-standard)
     """
     
     def __init__(self, dim, var, target_dist: TargetDistribution = None, 
                  symmetric=True, beta=1.0, beta_ladder=None, swap_acceptance_rate=None,
-                 device=None, batch_size=1024, pre_allocate_steps=None):
+                 device=None, batch_size=1024, pre_allocate_steps=None, standard_rwm=True):
         """Initialize the GPU-accelerated RandomWalkMH algorithm.
         
         Args:
@@ -27,12 +26,15 @@ class RandomWalkMH_GPU(MHAlgorithm):
             symmetric: Whether proposal distribution is symmetric
             beta: Temperature parameter (inverse)
             device: PyTorch device ('cuda', 'cpu', or None for auto-detect)
-            batch_size: Number of proposals to process in parallel
-            pre_allocate_steps: Pre-allocate memory for this many steps (None for dynamic)
+            batch_size: Number of proposals to process in parallel (for non-standard mode)
+            pre_allocate_steps: Pre-allocate memory for this many steps (None for dynamic).
+            NOTE: This should be set to the number of samples you want to generate.
+            standard_rwm: If True, use standard RWM (sequential). If False, use batch processing. 
+            IMPORTANT NOTE: If you use batch processing, you are doing "multiple proposal" or "delayed update" MCMC.
+            This is not the same as standard RWM.
         """
         super().__init__(dim, var, target_dist, symmetric)
         
-        # GPU setup
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
@@ -43,10 +45,14 @@ class RandomWalkMH_GPU(MHAlgorithm):
         else:
             print("Using CPU (consider installing CUDA for better performance)")
         
-        # Algorithm parameters
         self.beta = beta
         self.batch_size = batch_size
-        self.name = "RWM_GPU"
+        self.standard_rwm = standard_rwm
+        
+        if standard_rwm:
+            self.name = "RWM_GPU_Standard"
+        else:
+            self.name = "RWM_GPU_Batch"
         
         # Performance tracking
         self.num_acceptances = 0
@@ -67,11 +73,13 @@ class RandomWalkMH_GPU(MHAlgorithm):
             self.chain_index = None
             
         # Convert proposal covariance to GPU
+        # NOTE: To sample from a multivariate normal distribution N(μ, Σ), 
+        # you can use the transformation: x = μ + L * z, 
+        # where z ~ N(0, I) and L is the Cholesky decomposition of Σ.
         self.proposal_cov = (var / beta) * torch.eye(dim, device=self.device, dtype=torch.float32)
         self.proposal_cov_chol = torch.linalg.cholesky(self.proposal_cov)
         
-        # Current state tracking
-        self.current_state = None
+        self.current_state_gpu = None
         self.log_target_density_current = -float('inf')
         
         # Cache for target distribution if it supports GPU
@@ -84,20 +92,23 @@ class RandomWalkMH_GPU(MHAlgorithm):
             self.use_gpu_target = True
         else:
             self.use_gpu_target = False
-            # Create a vectorized wrapper for CPU target distributions
-            self._cached_target_density = self._vectorized_target_density
+            # Create a wrapper for CPU target distributions
+            self._cached_target_density = self._evaluate_target_density
     
-    def _vectorized_target_density(self, states_tensor):
-        """Vectorized evaluation of target density for CPU distributions."""
-        states_np = states_tensor.cpu().numpy()
-        if len(states_np.shape) == 1:
-            states_np = states_np.reshape(1, -1)
-        
-        densities = np.zeros(states_np.shape[0])
-        for i, state in enumerate(states_np):
-            densities[i] = self.target_density(state)
-        
-        return torch.tensor(densities, device=self.device, dtype=torch.float32)
+    def _evaluate_target_density(self, state_tensor):
+        """Evaluate target density for a single state (GPU tensor input)."""
+        if len(state_tensor.shape) == 2:
+            # Batch of states
+            states_np = state_tensor.cpu().numpy()
+            densities = np.zeros(states_np.shape[0])
+            for i, state in enumerate(states_np):
+                densities[i] = self.target_density(state)
+            return torch.tensor(densities, device=self.device, dtype=torch.float32)
+        else:
+            # Single state
+            state_np = state_tensor.cpu().numpy()
+            density = self.target_density(state_np)
+            return torch.tensor(density, device=self.device, dtype=torch.float32)
     
     def get_name(self):
         return self.name
@@ -108,14 +119,91 @@ class RandomWalkMH_GPU(MHAlgorithm):
         self.num_acceptances = 0
         self.acceptance_rate = 0
         self.total_steps = 0
-        self.current_state = None
+        self.current_state_gpu = None
         self.log_target_density_current = -float('inf')
         if self.pre_allocated_chain is not None:
             self.chain_index = 0
     
     def step(self):
-        """Take a single MCMC step."""
-        self.batch_step(batch_size=1)
+        """Take a single MCMC step using the selected method."""
+        if self.standard_rwm:
+            self._standard_step()
+        else:
+            self.batch_step(batch_size=1)
+    
+    def _standard_step(self):
+        """Take a single standard RWM step with GPU acceleration."""
+        # Initialize current state if needed
+        if self.current_state_gpu is None:
+            # Use the initial sample from the base class
+            self.current_state_gpu = torch.tensor(
+                self.chain[-1], device=self.device, dtype=torch.float32
+            )
+            self.log_target_density_current = self._compute_log_density(self.current_state_gpu)
+            
+            # Add initial state to pre-allocated chain if using pre-allocation
+            if self.pre_allocated_chain is not None and self.chain_index == 0:
+                self.pre_allocated_chain[self.chain_index] = self.current_state_gpu
+                self.chain_index += 1
+        
+        # Generate a single proposal using GPU
+        proposal = self._generate_single_proposal()
+        
+        # Compute acceptance ratio
+        log_accept_ratio, log_density_proposed = self._compute_acceptance_ratio(proposal)
+        
+        # Make acceptance decision
+        accept = self._make_single_acceptance_decision(log_accept_ratio)
+        
+        # Update state
+        if accept:
+            self.current_state_gpu = proposal
+            self.log_target_density_current = log_density_proposed.item()
+            self.num_acceptances += 1
+        
+        # Add to chain and update statistics
+        self._add_to_chain(self.current_state_gpu)
+        self.total_steps += 1
+        self.acceptance_rate = self.num_acceptances / self.total_steps
+    
+    def _generate_single_proposal(self):
+        """Generate a single proposal state using GPU operations."""
+        # Generate random noise on GPU
+        noise = torch.randn(self.dim, device=self.device, dtype=torch.float32)
+        
+        # Apply covariance structure: proposal = current + chol @ noise
+        proposal = self.current_state_gpu + torch.matmul(self.proposal_cov_chol, noise)
+        
+        return proposal
+    
+    def _compute_acceptance_ratio(self, proposal):
+        """Compute log acceptance ratio for a single proposal."""
+        # Compute log density for proposal
+        if self.use_gpu_target:
+            density_proposed = self.target_dist.batch_density_gpu(proposal.unsqueeze(0))[0]
+            log_density_proposed = torch.log(density_proposed + 1e-300)
+        else:
+            density_proposed = self._cached_target_density(proposal)
+            log_density_proposed = torch.log(density_proposed + 1e-300)
+        
+        # Compute acceptance ratio
+        log_accept_ratio = self.beta * (log_density_proposed - self.log_target_density_current)
+        
+        if not self.symmetric:
+            # Add proposal ratio terms (currently assuming symmetric proposals)
+            warnings.warn("Asymmetric proposals not yet optimized for GPU implementation")
+        
+        return log_accept_ratio, log_density_proposed
+    
+    def _make_single_acceptance_decision(self, log_accept_ratio):
+        """Make acceptance/rejection decision for a single proposal."""
+        # Generate random number for acceptance decision
+        random_val = torch.rand(1, device=self.device)
+        
+        # Accept if log_ratio > 0 or random < exp(log_ratio)
+        accept = (log_accept_ratio > 0) or (random_val < torch.exp(log_accept_ratio))
+        
+        return accept
     
     def batch_step(self, batch_size=None):
         """Take multiple MCMC steps in parallel using vectorized operations.
@@ -127,15 +215,15 @@ class RandomWalkMH_GPU(MHAlgorithm):
             batch_size = self.batch_size
             
         # Initialize current state if needed
-        if self.current_state is None:
-            if len(self.chain) == 0:
-                # Initialize with a random state
-                self.current_state = torch.randn(self.dim, device=self.device, dtype=torch.float32)
-                self._add_to_chain(self.current_state)
-                self.log_target_density_current = self._compute_log_density(self.current_state)
-            else:
-                self.current_state = torch.tensor(self.chain[-1], device=self.device, dtype=torch.float32)
-                self.log_target_density_current = self._compute_log_density(self.current_state)
+        if self.current_state_gpu is None:
+            # Use the initial sample from the base class (to match CPU behavior)
+            self.current_state_gpu = torch.tensor(self.chain[-1], device=self.device, dtype=torch.float32)
+            self.log_target_density_current = self._compute_log_density(self.current_state_gpu)
+            
+            # Add initial state to pre-allocated chain if using pre-allocation
+            if self.pre_allocated_chain is not None and self.chain_index == 0:
+                self.pre_allocated_chain[self.chain_index] = self.current_state_gpu
+                self.chain_index += 1
         
         # Generate batch of proposals
         proposals = self._generate_proposals(batch_size)
@@ -149,11 +237,11 @@ class RandomWalkMH_GPU(MHAlgorithm):
         # Process acceptances sequentially (MCMC is inherently sequential)
         for i in range(batch_size):
             if accept_flags[i]:
-                self.current_state = proposals[i].clone()
+                self.current_state_gpu = proposals[i].clone()
                 self.log_target_density_current = log_densities[i].item()
                 self.num_acceptances += 1
             
-            self._add_to_chain(self.current_state)
+            self._add_to_chain(self.current_state_gpu)
             self.total_steps += 1
             self.acceptance_rate = self.num_acceptances / self.total_steps
     
@@ -163,7 +251,7 @@ class RandomWalkMH_GPU(MHAlgorithm):
         noise = torch.randn(batch_size, self.dim, device=self.device, dtype=torch.float32)
         
         # Apply covariance structure: proposals = current + chol @ noise^T
-        proposals = self.current_state.unsqueeze(0) + torch.matmul(noise, self.proposal_cov_chol.T)
+        proposals = self.current_state_gpu.unsqueeze(0) + torch.matmul(noise, self.proposal_cov_chol.T)
         
         return proposals
     
@@ -203,10 +291,12 @@ class RandomWalkMH_GPU(MHAlgorithm):
         """Compute log density for a single state."""
         if self.use_gpu_target:
             density = self.target_dist.batch_density_gpu(state.unsqueeze(0))[0]
+            log_density = torch.log(density + 1e-300)
         else:
-            density = self._cached_target_density(state.unsqueeze(0))[0]
+            density = self._cached_target_density(state)
+            log_density = torch.log(density + 1e-300)
         
-        return torch.log(density + 1e-300).item()
+        return log_density.item()
     
     def _add_to_chain(self, state):
         """Add state to the chain (either pre-allocated or dynamic)."""
@@ -227,6 +317,44 @@ class RandomWalkMH_GPU(MHAlgorithm):
             return self.pre_allocated_chain[:self.chain_index]
         else:
             return torch.tensor(np.array(self.chain), device=self.device, dtype=torch.float32)
+    
+    def generate_samples(self, num_samples):
+        """Generate samples using the selected method (standard or batch).
+        
+        Args:
+            num_samples: Total number of samples to generate
+            
+        Returns:
+            Chain of samples
+        """
+        if self.standard_rwm:
+            return self.generate_samples_standard(num_samples)
+        else:
+            return self.generate_samples_batch(num_samples)
+    
+    def generate_samples_standard(self, num_samples):
+        """Generate samples using standard sequential RWM with GPU acceleration.
+        
+        Args:
+            num_samples: Total number of samples to generate
+            
+        Returns:
+            Chain of samples
+        """
+        print(f"Generating {num_samples} samples using standard RWM with GPU acceleration")
+        
+        for i in range(num_samples):
+            self._standard_step()
+            
+            if (i + 1) % 1000 == 0:
+                print(f"Generated {i + 1}/{num_samples} samples "
+                      f"(Accept rate: {self.acceptance_rate:.3f})")
+        
+        # Return the correct chain based on allocation method
+        if self.pre_allocated_chain is not None:
+            return self.pre_allocated_chain[:self.chain_index].cpu().numpy()
+        else:
+            return self.chain
     
     def generate_samples_batch(self, num_samples, batch_size=None):
         """Generate samples using batch processing for maximum efficiency.
@@ -254,7 +382,11 @@ class RandomWalkMH_GPU(MHAlgorithm):
                 print(f"Completed batch {batch_idx + 1}/{num_batches} "
                       f"(Accept rate: {self.acceptance_rate:.3f})")
         
-        return self.chain
+        # Return the correct chain based on allocation method
+        if self.pre_allocated_chain is not None:
+            return self.pre_allocated_chain[:self.chain_index].cpu().numpy()
+        else:
+            return self.chain
     
     def expected_squared_jump_distance_gpu(self):
         """Compute ESJD using GPU tensors for efficiency."""

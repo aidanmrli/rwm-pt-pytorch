@@ -1,6 +1,6 @@
 # Data Directory
 
-This directory `montecarlo/data/` contains experimental results from MCMC algorithm performance studies. The data files store comprehensive metrics for analyzing the relationship between acceptance rates and expected squared jumping distances (ESJD) across different target distributions, algorithms, and dimensionalities.
+This directory `data/` contains experimental results from MCMC algorithm performance studies. The data files store comprehensive metrics for analyzing the relationship between acceptance rates and expected squared jumping distances (ESJD) across different target distributions, algorithms, and dimensionalities.
 
 ## Overview
 

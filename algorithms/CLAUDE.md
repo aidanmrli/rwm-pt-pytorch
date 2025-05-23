@@ -1,6 +1,6 @@
 # Algorithms Directory
 
-This directory `montecarlo/algorithms/` contains the core MCMC algorithm implementations, specifically Random Walk Metropolis (RWM) and Parallel Tempering Random Walk Metropolis (PT-RWM) algorithms. These implementations inherit from the `MHAlgorithm` interface and provide the actual sampling logic for exploring target distributions.
+This directory `algorithms/` contains the core MCMC algorithm implementations, specifically Random Walk Metropolis (RWM) and Parallel Tempering Random Walk Metropolis (PT-RWM) algorithms. These implementations inherit from the `MHAlgorithm` interface and provide the actual sampling logic for exploring target distributions.
 
 ## Overview
 
