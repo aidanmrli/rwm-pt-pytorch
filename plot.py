@@ -36,6 +36,7 @@ def create_plot(data, filename):
             marker='x')
 
     plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
+    # plt.axvline(x=0.135, color='purple', linestyle=':', label='a = 0.135')
     plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs acceptance rate (dim={dim})')
@@ -60,6 +61,5 @@ def process_directory(directory_path):
 
 # Main execution
 if __name__ == "__main__":
-    # Replace 'data_directory' with the path to your directory containing JSON files
-    data_directory = 'data/data_directory'
+    data_directory = 'data/'
     process_directory(data_directory)
