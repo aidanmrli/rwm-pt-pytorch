@@ -2,15 +2,17 @@ import numpy as np
 import torch
 from scipy.stats import norm
 import matplotlib.pyplot as plt
-from .metropolis import MHAlgorithm
-from .target import TargetDistribution
-from typing import Optional, Callable
+from typing import Optional, Callable, Union
 import tqdm
 import time
+from .metropolis import MHAlgorithm
+from .target import TargetDistribution
+from .target_torch import TorchTargetDistribution
+
 
 class MCMCSimulation_GPU:
     """
-    GPU-accelerated MCMC simulation class with batch processing and performance optimizations.
+    GPU-accelerated MCMC simulation class with performance optimizations.
     Provides significant speedup over the standard simulation class.
     """
     
@@ -19,13 +21,12 @@ class MCMCSimulation_GPU:
                  sigma: float, 
                  num_iterations: int = 1000, 
                  algorithm: MHAlgorithm = None,
-                 target_dist: TargetDistribution = None,
+                 target_dist: Union[TargetDistribution, TorchTargetDistribution] = None,
                  symmetric: bool = True,
                  seed: Optional[int] = None,
                  beta_ladder: Optional[list] = None,
                  swap_acceptance_rate: Optional[float] = None,
                  device: Optional[str] = None,
-                 batch_size: int = 1024,
                  pre_allocate: bool = True):
         """
         Initialize GPU-accelerated MCMC simulation.
@@ -41,31 +42,25 @@ class MCMCSimulation_GPU:
             beta_ladder: Temperature ladder for parallel tempering
             swap_acceptance_rate: Swap acceptance rate for PT
             device: PyTorch device ('cuda', 'cpu', or None for auto-detect)
-            batch_size: Batch size for GPU processing
             pre_allocate: Whether to pre-allocate memory for chains
         """
         self.num_iterations = num_iterations
         self.target_dist = target_dist
-        self.batch_size = batch_size
         self.pre_allocate = pre_allocate
         
-        # Setup device
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
             self.device = torch.device(device)
         
-        # Initialize algorithm with GPU optimizations
         algorithm_kwargs = {
             'dim': dim,
             'var': sigma,
             'target_dist': target_dist,
             'symmetric': symmetric,
             'device': self.device,
-            'batch_size': batch_size
         }
         
-        # Add optional parameters if they exist
         if beta_ladder is not None:
             algorithm_kwargs['beta_ladder'] = beta_ladder
         if swap_acceptance_rate is not None:
@@ -93,12 +88,11 @@ class MCMCSimulation_GPU:
         else:
             return len(self.algorithm.chain) > 1
 
-    def generate_samples(self, use_batch_processing=True, progress_bar=True):
+    def generate_samples(self, progress_bar=True):
         """
-        Generate samples using optimized batch processing or traditional step-by-step.
+        Generate samples step-by-step.
         
         Args:
-            use_batch_processing: Whether to use GPU batch processing
             progress_bar: Whether to show progress bar
             
         Returns:
@@ -109,24 +103,16 @@ class MCMCSimulation_GPU:
         
         start_time = time.time()
         
-        if use_batch_processing and hasattr(self.algorithm, 'generate_samples_batch'):
-            print("Using GPU-accelerated batch processing...")
-            chain = self.algorithm.generate_samples_batch(
-                self.num_iterations, 
-                batch_size=self.batch_size
-            )
-        else:
-            print("Using traditional step-by-step processing...")
-            if progress_bar:
-                with tqdm.tqdm(total=self.num_iterations, desc="Running MCMC", unit="iteration") as pbar:
-                    for i in range(self.num_iterations):
-                        self.algorithm.step()
-                        pbar.update(1)
-            else:
+        if progress_bar:
+            with tqdm.tqdm(total=self.num_iterations, desc="Running MCMC", unit="iteration") as pbar:
                 for i in range(self.num_iterations):
                     self.algorithm.step()
-            chain = self.algorithm.chain
-        
+                    pbar.update(1)
+        else:
+            for i in range(self.num_iterations):
+                self.algorithm.step()
+                
+        chain = self.algorithm.chain
         end_time = time.time()
         elapsed_time = end_time - start_time
         
@@ -195,7 +181,7 @@ class MCMCSimulation_GPU:
             
             # GPU benchmark
             start_time = time.time()
-            self.generate_samples(use_batch_processing=True, progress_bar=False)
+            self.generate_samples(progress_bar=False)
             gpu_time = time.time() - start_time
             gpu_sps = num_samples / gpu_time
             
@@ -208,7 +194,7 @@ class MCMCSimulation_GPU:
                 # CPU benchmark (if available)
                 self.reset()
                 start_time = time.time()
-                self.generate_samples(use_batch_processing=False, progress_bar=False)
+                self.generate_samples(progress_bar=False)
                 cpu_time = time.time() - start_time
                 cpu_sps = num_samples / cpu_time
                 speedup = cpu_time / gpu_time
@@ -235,8 +221,7 @@ class MCMCSimulation_GPU:
         
         # Get chain data (potentially from GPU)
         if use_gpu_data and hasattr(self.algorithm, 'get_chain_gpu'):
-            chain_tensor = self.algorithm.get_chain_gpu()
-            chain = chain_tensor.cpu().numpy()
+            chain = self.algorithm.get_chain_gpu().cpu().numpy()
         else:
             chain = np.array(self.algorithm.chain)
         
@@ -251,7 +236,7 @@ class MCMCSimulation_GPU:
         plt.legend()
         plt.title(f'Traceplot - {self.algorithm.get_name()} (GPU-accelerated)')
         
-        filename = f"images/traceplot_gpu_{self.target_dist.get_name()}_{self.algorithm.get_name()}_dim{self.algorithm.dim}_{self.num_iterations}iters"
+        filename = f"images/traceplot_{self.target_dist.get_name()}_{self.algorithm.get_name()}_dim{self.algorithm.dim}_{self.num_iterations}iters"
         plt.savefig(filename, dpi=300, bbox_inches='tight')
         
         if show:

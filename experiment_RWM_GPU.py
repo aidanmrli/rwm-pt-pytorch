@@ -2,22 +2,20 @@ import argparse
 import time
 import torch
 from interfaces import MCMCSimulation_GPU
-from algorithms import RandomWalkMH_GPU
+from algorithms import *
 import numpy as np
-from target_distributions import MultivariateNormal_GPU, MultivariateNormal
+from target_distributions import *
 import matplotlib.pyplot as plt
 import json
 
-def get_target_distribution(name, dim, use_gpu=True):
+def get_target_distribution(name, dim, use_torch=True):
     """Get target distribution with optional GPU acceleration."""
-    if use_gpu and name == "MultivariateNormal":
-        return MultivariateNormal_GPU(dim)
+    if use_torch and name == "MultivariateNormal":
+        return MultivariateNormalTorch(dim)
     elif name == "MultivariateNormal":
         return MultivariateNormal(dim)
     else:
         # For other distributions, fall back to CPU versions
-        from target_distributions import (RoughCarpetDistribution, ThreeMixtureDistribution, 
-                                        Hypercube, IIDGamma, IIDBeta)
         if name == "RoughCarpet":
             return RoughCarpetDistribution(dim, scaling=False)
         elif name == "RoughCarpetScaled":
@@ -35,7 +33,7 @@ def get_target_distribution(name, dim, use_gpu=True):
         else:
             raise ValueError("Unknown target distribution name")
 
-def run_performance_comparison(dim, num_iters, target_name="MultivariateNormal"):
+def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTorch"):
     """Compare GPU vs CPU performance for a single configuration."""
     print(f"\n{'='*60}")
     print(f"PERFORMANCE COMPARISON: {target_name} (dim={dim}, samples={num_iters})")
@@ -56,12 +54,11 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormal")
         algorithm=RandomWalkMH_GPU,
         target_dist=target_dist_gpu,
         symmetric=True,
-        batch_size=min(1024, num_iters//10),  # Adaptive batch size
         pre_allocate=True,
         seed=42
     )
     
-    chain_gpu = simulation_gpu.generate_samples(use_batch_processing=True, progress_bar=False)
+    chain_gpu = simulation_gpu.generate_samples(progress_bar=False)
     gpu_time = time.time() - gpu_start
     gpu_acceptance = simulation_gpu.acceptance_rate()
     gpu_esjd = simulation_gpu.expected_squared_jump_distance()
@@ -130,21 +127,20 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormal")
         'cpu_esjd': cpu_esjd
     }
 
-def run_optimization_study(dim, target_name="MultivariateNormal", num_iters=50000):
-    """Run parameter optimization study using GPU acceleration."""
+def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=2.0):
+    """Run many simulations with different variance values, then save and plot the progression of ESJD and acceptance rate."""
     print(f"\n{'='*60}")
-    print(f"GPU-ACCELERATED PARAMETER OPTIMIZATION")
     print(f"Target: {target_name}, Dimension: {dim}, Samples: {num_iters}")
     print(f"{'='*60}")
     
     target_distribution = get_target_distribution(target_name, dim, use_gpu=True)
-    var_value_range = np.linspace(0.000001, 2.0, 20)  # Reduced range for faster testing
+    var_value_range = np.linspace(0.000001, var_max, 40)
     
     acceptance_rates = []
     expected_squared_jump_distances = []
     times = []
     
-    print(f"\nRunning optimization sweep with {len(var_value_range)} variance values...")
+    print(f"\nRunning simulations with {len(var_value_range)} variance values...")
     
     total_start = time.time()
     
@@ -160,12 +156,11 @@ def run_optimization_study(dim, target_name="MultivariateNormal", num_iters=5000
             algorithm=RandomWalkMH_GPU,
             target_dist=target_distribution,
             symmetric=True,
-            batch_size=min(2048, num_iters//5),  # Aggressive batching
             pre_allocate=True,
             seed=42 + i  # Different seed for each run
         )
         
-        chain = simulation.generate_samples(use_batch_processing=True, progress_bar=False)
+        chain = simulation.generate_samples(progress_bar=False)
         
         iteration_time = time.time() - iteration_start
         times.append(iteration_time)
@@ -176,12 +171,9 @@ def run_optimization_study(dim, target_name="MultivariateNormal", num_iters=5000
         if (i + 1) % 5 == 0:
             print(f"   Progress: {i+1}/{len(var_value_range)} "
                   f"({iteration_time:.1f}s, acc={acceptance_rates[-1]:.3f})")
-        
-        simulation.reset()  # Clean up for next iteration
     
     total_time = time.time() - total_start
     
-    # Find optimal parameters
     max_esjd = max(expected_squared_jump_distances)
     max_esjd_index = np.argmax(expected_squared_jump_distances)
     max_acceptance_rate = acceptance_rates[max_esjd_index]
@@ -243,16 +235,8 @@ def run_optimization_study(dim, target_name="MultivariateNormal", num_iters=5000
     plt.title('ESJD vs Variance')
     plt.grid(True, alpha=0.3)
     
-    # Plot 4: Computation Time per Configuration
-    plt.subplot(2, 2, 4)
-    plt.plot(range(len(times)), times, 'purple', marker='o', markersize=4)
-    plt.xlabel('Configuration Index')
-    plt.ylabel('Time (seconds)')
-    plt.title('Computation Time per Configuration')
-    plt.grid(True, alpha=0.3)
-    
     plt.tight_layout()
-    plot_filename = f"images/ESJD_optimization_GPU_{target_name}_dim{dim}_{num_iters}iters.png"
+    plot_filename = f"images/_GPU_{target_name}_dim{dim}_{num_iters}iters.png"
     plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"   Plots saved to: {plot_filename}")
@@ -265,12 +249,11 @@ if __name__ == "__main__":
     parser.add_argument("--target", type=str, default="MultivariateNormal", help="Target distribution")
     parser.add_argument("--num_iters", type=int, default=100000, help="Number of iterations")
     parser.add_argument("--mode", type=str, default="comparison", 
-                       choices=["comparison", "optimization", "benchmark"],
-                       help="Mode: comparison (GPU vs CPU), optimization (parameter sweep), or benchmark")
+                       choices=["default", "comparison", "benchmark"],
+                       help="Mode: default (run study), comparison (GPU vs CPU), or benchmark")
     
     args = parser.parse_args()
     
-    # Check GPU availability
     if torch.cuda.is_available():
         print(f"🚀 GPU detected: {torch.cuda.get_device_name()}")
         print(f"   CUDA version: {torch.version.cuda}")
@@ -278,13 +261,14 @@ if __name__ == "__main__":
     else:
         print("⚠️  No GPU detected. Running on CPU (will be slower)")
     
-    if args.mode == "comparison":
+    
+    if args.mode == "default":
+        # Parameter optimization study
+        results = run_study(args.dim, args.target, args.num_iters)
+        
+    elif args.mode == "comparison":
         # Performance comparison
         results = run_performance_comparison(args.dim, args.num_iters, args.target)
-        
-    elif args.mode == "optimization":
-        # Parameter optimization study
-        results = run_optimization_study(args.dim, args.target, args.num_iters)
         
     elif args.mode == "benchmark":
         # Comprehensive benchmark

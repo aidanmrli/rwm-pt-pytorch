@@ -7,7 +7,6 @@ This repository implements a comprehensive framework for studying optimal scalin
 **MAJOR PERFORMANCE IMPROVEMENT**: The codebase now includes GPU-accelerated implementations that provide **10-100x speedup** over the original CPU versions:
 
 - **GPU-Accelerated Algorithms**: `RandomWalkMH_GPU` with PyTorch-based vectorization
-- **Batch Processing**: Process thousands of MCMC proposals simultaneously on GPU
 - **Smart Memory Management**: Pre-allocated GPU memory for optimal performance
 - **Seamless Integration**: Drop-in replacements for existing algorithms with identical interfaces
 - **Automatic Fallback**: Works on both GPU and CPU systems automatically
@@ -43,7 +42,6 @@ The codebase follows a modular, interface-based design adhering to SOLID princip
 4. **Experimental Framework**: Scripts for systematic studies
    - `experiment_RWM.py`: Comprehensive RWM parameter sweeps
    - `experiment_pt.py`: Parallel tempering optimization studies
-   - `experiment_many.py`: Batch experiments across conditions
 
 ## Key Features
 
@@ -132,16 +130,14 @@ python experiment_pt.py --dim 30 --target ThreeMixture --swap_accept_max 0.6
 
 ### Performance Optimization
 - **GPU Acceleration**: PyTorch-based GPU-accelerated implementations with 10-100x speedup
-- **Batch Processing**: Vectorized proposal generation and density evaluation
 - **Memory Management**: Pre-allocated GPU memory for chains to reduce allocation overhead
-- **Adaptive Batching**: Dynamic batch sizing based on problem dimensions and GPU memory
 - Cached target density evaluations to reduce redundant computation
 - Efficient state management in parallel tempering
 - Vectorized operations where applicable
 
 ### GPU-Accelerated Components
-- **RandomWalkMH_GPU**: GPU-accelerated Random Walk Metropolis with batch processing
-- **MultivariateNormal_GPU**: GPU-optimized target distribution with batch density evaluation
+- **RandomWalkMH_GPU**: GPU-accelerated Random Walk Metropolis
+- **MultivariateNormal_GPU**: GPU-optimized target distribution
 - **MCMCSimulation_GPU**: GPU-aware simulation framework with performance benchmarking
 - **Automatic Device Detection**: Seamless fallback to CPU when GPU unavailable
 

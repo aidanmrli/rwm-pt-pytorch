@@ -68,7 +68,6 @@ class MultivariateNormalTorch(TorchTargetDistribution):
         Returns:
             Tensor of log densities with shape () for single point or (batch_size,) for batch
         """
-        # Ensure x is on the correct device
         if x.device != self.device:
             x = x.to(self.device)
         
