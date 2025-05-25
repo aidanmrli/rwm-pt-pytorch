@@ -248,7 +248,7 @@ if __name__ == "__main__":
     parser.add_argument("--dim", type=int, default=20, help="Dimension of the target distribution")
     parser.add_argument("--target", type=str, default="MultivariateNormal", help="Target distribution")
     parser.add_argument("--num_iters", type=int, default=100000, help="Number of iterations")
-    parser.add_argument("--mode", type=str, default="comparison", 
+    parser.add_argument("--mode", type=str, default="default", 
                        choices=["default", "comparison", "benchmark"],
                        help="Mode: default (run study), comparison (GPU vs CPU), or benchmark")
     
