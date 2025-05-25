@@ -46,7 +46,7 @@ try:
     print("✅ CPU step works")
     
     print("\n🎉 All basic tests passed! Ready to run full test suite.")
-    print("Now run: python test_standard_rwm.py")
+    print("Now run: python test_rwm_correctness.py")
     
 except Exception as e:
     print(f"❌ Error: {e}")
