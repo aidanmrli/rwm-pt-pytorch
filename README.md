@@ -28,7 +28,7 @@ cd random-walk-metropolis
 pip install -r requirements.txt
 ```
 
-For maximum performance, install PyTorch with GPU support. On a Linux system, running the standard command as per the PyTorch website [https://pytorch.org/get-started/locally/] should be fine:
+For maximum performance, install PyTorch with GPU support. On a Linux system, running the standard command as per the [PyTorch website](https://pytorch.org/get-started/locally/) should be fine:
 
 ```bash
 # For CUDA 12.6
@@ -241,4 +241,3 @@ This repository is designed for easy extension:
 ## License
 
 This repository is MIT licensed. See the LICENSE file for details.
-```
