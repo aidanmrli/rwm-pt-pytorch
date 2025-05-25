@@ -116,8 +116,7 @@ class MCMCSimulation_GPU:
         end_time = time.time()
         elapsed_time = end_time - start_time
         
-        print(f"Sampling completed in {elapsed_time:.2f} seconds")
-        print(f"Samples per second: {self.num_iterations/elapsed_time:.0f}")
+        print(f"Drew {self.num_iterations} samples in {elapsed_time:.2f} seconds ({self.num_iterations/elapsed_time:.0f} samples/s)")
         print(f"Final acceptance rate: {self.acceptance_rate():.3f}")
         
         return chain
