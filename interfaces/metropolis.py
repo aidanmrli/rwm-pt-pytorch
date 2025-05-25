@@ -17,7 +17,7 @@ class MHAlgorithm:
         self.dim = dim
         self.var = var
         self.target_dist = target_dist
-        self.chain = [np.random.rand(dim)]
+        self.chain = [0.01 * np.random.randn(dim)]
         self.symmetric = symmetric
         self.num_acceptances = 0    # use this to calculate acceptance rate
         self.acceptance_rate = 0
