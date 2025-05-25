@@ -40,7 +40,8 @@ class MultivariateNormalTorch(TorchTargetDistribution):
         self.cov_det = torch.linalg.det(self.cov)
         
         # Pre-compute log normalization constant
-        self.log_norm_const = -0.5 * (dim * torch.log(2 * torch.tensor(torch.pi, device=self.device)) + torch.log(self.cov_det))
+        log_2pi = torch.log(torch.tensor(2.0 * torch.pi, device=self.device, dtype=torch.float32))
+        self.log_norm_const = -0.5 * (dim * log_2pi + torch.log(self.cov_det))
 
     def get_name(self):
         """Return the name of the target distribution as a string."""
