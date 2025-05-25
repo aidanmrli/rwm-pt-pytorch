@@ -7,6 +7,7 @@ import numpy as np
 from target_distributions import *
 import matplotlib.pyplot as plt
 import json
+import tqdm
 
 def get_target_distribution(name, dim, use_torch=True):
     """Get target distribution with optional GPU acceleration."""
@@ -44,7 +45,7 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
     
     # GPU version
     print("\n🚀 Testing GPU-accelerated implementation...")
-    target_dist_gpu = get_target_distribution(target_name, dim, use_gpu=True)
+    target_dist_gpu = get_target_distribution(target_name, dim, use_torch=True)
     
     gpu_start = time.time()
     simulation_gpu = MCMCSimulation_GPU(
@@ -74,7 +75,7 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
     from algorithms import RandomWalkMH
     from interfaces import MCMCSimulation
     
-    target_dist_cpu = get_target_distribution(target_name, dim, use_gpu=False)
+    target_dist_cpu = get_target_distribution(target_name, dim, use_torch=False)
     
     cpu_start = time.time()
     simulation_cpu = MCMCSimulation(
@@ -127,14 +128,14 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
         'cpu_esjd': cpu_esjd
     }
 
-def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=2.0):
+def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5):
     """Run many simulations with different variance values, then save and plot the progression of ESJD and acceptance rate."""
     print(f"\n{'='*60}")
     print(f"Target: {target_name}, Dimension: {dim}, Samples: {num_iters}")
     print(f"{'='*60}")
     
-    target_distribution = get_target_distribution(target_name, dim, use_gpu=True)
-    var_value_range = np.linspace(0.000001, var_max, 40)
+    target_distribution = get_target_distribution(target_name, dim, use_torch=True)
+    var_value_range = np.linspace(0.001, var_max, 40)
     
     acceptance_rates = []
     expected_squared_jump_distances = []
@@ -144,9 +145,9 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     
     total_start = time.time()
     
-    for i, var in enumerate(var_value_range):
+    # Use tqdm for progress bar
+    for i, var in enumerate(tqdm.tqdm(var_value_range, desc="Variance optimization", unit="config")):
         variance = (var ** 2) / (dim ** (1))
-        
         iteration_start = time.time()
         
         simulation = MCMCSimulation_GPU(
@@ -167,10 +168,6 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         
         acceptance_rates.append(simulation.acceptance_rate())
         expected_squared_jump_distances.append(simulation.expected_squared_jump_distance())
-        
-        if (i + 1) % 5 == 0:
-            print(f"   Progress: {i+1}/{len(var_value_range)} "
-                  f"({iteration_time:.1f}s, acc={acceptance_rates[-1]:.3f})")
     
     total_time = time.time() - total_start
     
@@ -179,7 +176,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     max_acceptance_rate = acceptance_rates[max_esjd_index]
     max_variance_value = var_value_range[max_esjd_index]
     
-    print(f"\n🎯 Optimization Results:")
+    print(f"\nFinal Results:")
     print(f"   Total time: {total_time:.1f} seconds")
     print(f"   Average time per configuration: {np.mean(times):.1f} seconds")
     print(f"   Maximum ESJD: {max_esjd:.6f}")
@@ -206,40 +203,40 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         json.dump(data, file, indent=2)
     print(f"   Results saved to: {filename}")
     
-    # Create visualization
-    plt.figure(figsize=(12, 8))
+    # Create separate plots with consistent styling from original experiment
     
     # Plot 1: ESJD vs Acceptance Rate
-    plt.subplot(2, 2, 1)
-    plt.plot(acceptance_rates, expected_squared_jump_distances, 'b-o', markersize=4)
-    plt.axvline(x=0.234, color='red', linestyle='--', alpha=0.7, label='Theory: a=0.234')
-    plt.xlabel('Acceptance Rate')
+    plt.plot(acceptance_rates, expected_squared_jump_distances, marker='x')   
+    plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
+    plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
-    plt.title('ESJD vs Acceptance Rate (GPU)')
+    plt.title(f'ESJD vs acceptance rate (dim={dim})')
     plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    # Plot 2: Acceptance Rate vs Variance
-    plt.subplot(2, 2, 2)
-    plt.plot(var_value_range, acceptance_rates, 'g-o', markersize=4)
-    plt.xlabel('Variance Parameter')
-    plt.ylabel('Acceptance Rate')
-    plt.title('Acceptance Rate vs Variance')
-    plt.grid(True, alpha=0.3)
-    
-    # Plot 3: ESJD vs Variance
-    plt.subplot(2, 2, 3)
-    plt.plot(var_value_range, expected_squared_jump_distances, 'r-o', markersize=4)
-    plt.xlabel('Variance Parameter')
-    plt.ylabel('ESJD')
-    plt.title('ESJD vs Variance')
-    plt.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plot_filename = f"images/_GPU_{target_name}_dim{dim}_{num_iters}iters.png"
-    plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+    output_filename = f"images/ESJD_vs_acceptance_rate_{target_name}_RWM_GPU_dim{dim}_{num_iters}iters"
+    plt.savefig(output_filename, dpi=300, bbox_inches='tight')
+    plt.clf()
     plt.close()
-    print(f"   Plots saved to: {plot_filename}")
+    print(f"   Plot 1 created and saved as '{output_filename}'")
+
+    # Plot 2: Acceptance Rate vs Variance
+    plt.plot(var_value_range, acceptance_rates, label='Acceptance rate', marker='x')
+    plt.xlabel('Variance value (value^2 / dim)')
+    plt.ylabel('Acceptance rate')
+    plt.title(f'Acceptance rate for different variance values (dim={dim})')
+    filename = f"images/AcceptvsVar_{target_name}_RWM_GPU_dim{dim}_{num_iters}iters"
+    plt.savefig(filename)
+    plt.clf()
+    print(f"   Plot 2 created and saved as '{filename}'")
+
+    # Plot 3: ESJD vs Variance
+    plt.plot(var_value_range, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')
+    plt.xlabel('Variance value (value^2 / dim)')
+    plt.ylabel('ESJD')
+    plt.title(f'ESJD for different variance values (dim={dim})')
+    filename = f"images/ESJDvsVar_{target_name}_RWM_GPU_dim{dim}_{num_iters}iters"
+    plt.savefig(filename)
+    plt.clf()
+    print(f"   Plot 3 created and saved as '{filename}'")
     
     return data
 
@@ -248,6 +245,7 @@ if __name__ == "__main__":
     parser.add_argument("--dim", type=int, default=20, help="Dimension of the target distribution")
     parser.add_argument("--target", type=str, default="MultivariateNormal", help="Target distribution")
     parser.add_argument("--num_iters", type=int, default=100000, help="Number of iterations")
+    parser.add_argument("--var_max", type=float, default=3.5, help="Maximum variance value")
     parser.add_argument("--mode", type=str, default="default", 
                        choices=["default", "comparison", "benchmark"],
                        help="Mode: default (run study), comparison (GPU vs CPU), or benchmark")
@@ -264,7 +262,7 @@ if __name__ == "__main__":
     
     if args.mode == "default":
         # Parameter optimization study
-        results = run_study(args.dim, args.target, args.num_iters)
+        results = run_study(args.dim, args.target, args.num_iters, args.var_max)
         
     elif args.mode == "comparison":
         # Performance comparison
