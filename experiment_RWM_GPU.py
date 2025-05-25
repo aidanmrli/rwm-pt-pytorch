@@ -165,7 +165,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     total_start = time.time()
     
     # Use tqdm for progress bar
-    for i, var in enumerate(tqdm.tqdm(var_value_range, desc="Variance optimization", unit="config")):
+    for i, var in enumerate(tqdm.tqdm(var_value_range, desc="Running RWM with different variance values", unit="config")):
         variance = (var ** 2) / (dim ** (1))
         iteration_start = time.time()
         
