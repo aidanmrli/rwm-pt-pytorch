@@ -8,3 +8,4 @@ from .iid_product import *
 from .hypercube_torch import *
 from .multimodal_torch import *
 from .iid_product_torch import *
+from .rosenbrock_torch import *
