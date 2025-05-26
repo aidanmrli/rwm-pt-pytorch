@@ -49,3 +49,5 @@ python3 experiment_RWM.py --dim 50 --var_max 0.9 --target IIDBeta --num_iters 10
 # # python3 experiment_RWM.py --dim 20 --var_max 4.0 --target ThreeMixtureScaled --num_iters 100000 --init_seed 0 --num_seeds 5
 # # python3 experiment_RWM.py --dim 30 --var_max 4.0 --target ThreeMixtureScaled --num_iters 100000 --init_seed 0 --num_seeds 5
 # # python3 experiment_RWM.py --dim 50 --var_max 4.0 --target ThreeMixtureScaled --num_iters 100000 --init_seed 0 --num_seeds 5
+
+python3 experiment_RWM_GPU.py --dim 10 --var_max 1.5 --target FullRosenbrock --num_iters 100000 --init_seed 0 --num_seeds 5
