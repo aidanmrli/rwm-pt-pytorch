@@ -94,7 +94,7 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
                  device: str = None, 
                  pre_allocate_steps: int = None, 
                  use_efficient_rng: bool = True,
-                 compile_mode: str = "default"):
+                 compile_mode: str = None):
         """Initialize the optimized GPU RandomWalkMH algorithm.
         
         Args:
@@ -106,7 +106,7 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
             device: PyTorch device ('cuda', 'cpu', or None for auto-detect)
             pre_allocate_steps: Pre-allocate memory for this many steps
             use_efficient_rng: Use more efficient random number generation
-            compile_mode: PyTorch compilation mode ('default', 'max-autotune', etc.)
+            compile_mode: PyTorch compilation mode ('default', 'max-autotune', etc.) or None to disable
         """
         super().__init__(dim, var, target_dist, symmetric)
         
@@ -116,7 +116,6 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
             self.device = torch.device(device)
             
         if self.device.type == 'cuda':
-            print(f"Using optimized GPU acceleration: {torch.cuda.get_device_name()}")
             # Enable TensorFloat-32 for modern GPUs
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
@@ -171,7 +170,6 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
         # RNG optimization
         if use_efficient_rng and self.device.type == 'cuda':
             self.rng_generator = torch.Generator(device=self.device)
-            print("Using optimized CUDA RNG generator")
         else:
             self.rng_generator = None
         

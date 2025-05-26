@@ -51,6 +51,7 @@ The codebase follows a modular, interface-based design adhering to SOLID princip
 3. **Target Distributions** (`target_distributions/`): Test distributions
    - Unimodal: MultivariateNormal, Hypercube, IID products
    - Multimodal: ThreeMixture, RoughCarpet with optional scaling
+   - Rosenbrock: Full, Even, and Hybrid variants for MCMC testing. See Pagani et al. (2022) for details. "An n-dimensional Rosenbrock Distribution for MCMC testing"
 
 4. **Experimental Framework**: Scripts for systematic studies
    - `experiment_RWM.py`: Comprehensive RWM parameter sweeps
@@ -69,6 +70,12 @@ The codebase follows a modular, interface-based design adhering to SOLID princip
 - **Uniform Distributions**: Hypercube domains with adjustable boundaries
 - **IID Products**: Gamma and Beta distribution products for non-Gaussian testing
 - **Multimodal Challenges**: Three-component mixtures and rough carpet distributions
+- **🆕 Rosenbrock Distributions**: Three variants (Full, Even, Hybrid) from Pagani et al. (2020) for MCMC testing
+  - **Full Rosenbrock**: N-dimensional with sequential dependencies between all variables
+  - **Even Rosenbrock**: Independent pairs of 2D Rosenbrock-like terms (requires even dimension)
+  - **Hybrid Rosenbrock**: Global variable with multiple independent blocks
+  - **GPU-Optimized**: Full PyTorch implementation with device compatibility
+  - **Flexible Parameters**: Configurable coefficients (a, b) and means (μ) with tensor support
 - **Scaling Studies**: Optional coordinate-wise scaling for heterogeneous difficulty
 
 ### Experimental Infrastructure

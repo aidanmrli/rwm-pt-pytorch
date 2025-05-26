@@ -37,8 +37,7 @@ python experiment_RWM_GPU.py \
     --target $TARGET_DISTRIBUTION \
     --dim 2 \
     --num_iters 100000 \
-    --var_max 2.0 \
-    --mode default \
+    --var_max 1.5 \
     --seed $SLURM_ARRAY_TASK_ID
 
 echo "Completed RWM GPU study for seed $SLURM_ARRAY_TASK_ID" 

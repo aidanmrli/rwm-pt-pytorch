@@ -9,7 +9,11 @@ import matplotlib.pyplot as plt
 import json
 import tqdm
 
-def get_target_distribution(name, dim, use_torch=True):
+def calculate_hybrid_rosenbrock_dim(n1, n2):
+    """Calculate the dimension for HybridRosenbrock: 1 + n2 * (n1 - 1)"""
+    return 1 + n2 * (n1 - 1)
+
+def get_target_distribution(name, dim, use_torch=True, **kwargs):
     """Get target distribution with optional GPU acceleration."""
     if use_torch:
         # Use PyTorch-native implementations for GPU acceleration
@@ -29,6 +33,27 @@ def get_target_distribution(name, dim, use_torch=True):
             return IIDGammaTorch(dim, shape=2, scale=3)
         elif name == "IIDBeta":
             return IIDBetaTorch(dim, alpha=2, beta=3)
+        elif name == "FullRosenbrock":
+            a_coeff = kwargs.get('a_coeff', 1.0/20.0)
+            b_coeff = kwargs.get('b_coeff', 100.0/20.0)
+            mu = kwargs.get('mu', 1.0)
+            device = kwargs.get('device', None)
+            return FullRosenbrockTorch(dim, a_coeff=a_coeff, b_coeff=b_coeff, mu=mu, device=device)
+        elif name == "EvenRosenbrock":
+            a_coeff = kwargs.get('a_coeff', 1.0/20.0)
+            b_coeff = kwargs.get('b_coeff', 100.0/20.0)
+            mu = kwargs.get('mu', 1.0)
+            device = kwargs.get('device', None)
+            return EvenRosenbrockTorch(dim, a_coeff=a_coeff, b_coeff=b_coeff, mu=mu, device=device)
+        elif name == "HybridRosenbrock":
+            n1 = kwargs.get('n1', 3)
+            n2 = kwargs.get('n2', 5)
+            a_coeff = kwargs.get('a_coeff', 1.0/20.0)
+            b_coeff = kwargs.get('b_coeff', 100.0/20.0)
+            mu = kwargs.get('mu', 1.0)
+            device = kwargs.get('device', None)
+            # For HybridRosenbrock, dim is calculated from n1 and n2
+            return HybridRosenbrockTorch(n1=n1, n2=n2, a_coeff=a_coeff, b_coeff=b_coeff, mu=mu, device=device)
         else:
             raise ValueError("Unknown target distribution name")
     else:
@@ -49,28 +74,41 @@ def get_target_distribution(name, dim, use_torch=True):
             return IIDGamma(dim, shape=2, scale=3)
         elif name == "IIDBeta":
             return IIDBeta(dim, alpha=2, beta=3)
+        elif name in ["FullRosenbrock", "EvenRosenbrock", "HybridRosenbrock"]:
+            raise ValueError(f"{name} distribution only available with PyTorch (use_torch=True)")
         else:
             raise ValueError("Unknown target distribution name")
 
-def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTorch", seed=42):
+def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTorch", seed=42, **kwargs):
     """Compare GPU vs CPU performance for a single configuration."""
-    print(f"\n{'='*60}")
-    print(f"PERFORMANCE COMPARISON: {target_name} (dim={dim}, samples={num_iters}, seed={seed})")
-    print(f"{'='*60}")
+    
+    # Handle HybridRosenbrock dimension calculation
+    if target_name == "HybridRosenbrock":
+        n1 = kwargs.get('n1', 3)
+        n2 = kwargs.get('n2', 5)
+        actual_dim = calculate_hybrid_rosenbrock_dim(n1, n2)
+        print(f"\n{'='*60}")
+        print(f"PERFORMANCE COMPARISON: {target_name} (n1={n1}, n2={n2}, actual_dim={actual_dim}, samples={num_iters}, seed={seed})")
+        print(f"{'='*60}")
+    else:
+        actual_dim = dim
+        print(f"\n{'='*60}")
+        print(f"PERFORMANCE COMPARISON: {target_name} (dim={dim}, samples={num_iters}, seed={seed})")
+        print(f"{'='*60}")
     
     # Test variance (roughly optimal for high dimensions)
-    variance = 2.38**2 / dim
+    variance = 2.38**2 / actual_dim
     
     # GPU version
     print("\n🚀 Testing GPU-accelerated implementation...")
-    target_dist_gpu = get_target_distribution(target_name, dim, use_torch=True)
+    target_dist_gpu = get_target_distribution(target_name, dim, use_torch=True, **kwargs)
     
     gpu_start = time.time()
     simulation_gpu = MCMCSimulation_GPU(
-        dim=dim,
+        dim=actual_dim,
         sigma=variance,
         num_iterations=num_iters,
-        algorithm=RandomWalkMH_GPU,
+        algorithm=RandomWalkMH_GPU_Optimized,
         target_dist=target_dist_gpu,
         symmetric=True,
         pre_allocate=True,
@@ -93,11 +131,25 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
     from algorithms import RandomWalkMH
     from interfaces import MCMCSimulation
     
+    # Skip CPU comparison for Rosenbrock distributions (PyTorch only)
+    if target_name in ["FullRosenbrock", "EvenRosenbrock", "HybridRosenbrock"]:
+        print("   ⚠️  Skipping CPU comparison - Rosenbrock distributions only available with PyTorch")
+        return {
+            'gpu_time': gpu_time,
+            'cpu_time': None,
+            'speedup': None,
+            'gpu_acceptance': gpu_acceptance,
+            'cpu_acceptance': None,
+            'gpu_esjd': gpu_esjd,
+            'cpu_esjd': None,
+            'seed': seed
+        }
+    
     target_dist_cpu = get_target_distribution(target_name, dim, use_torch=False)
     
     cpu_start = time.time()
     simulation_cpu = MCMCSimulation(
-        dim=dim,
+        dim=actual_dim,
         sigma=variance,
         num_iterations=num_iters,
         algorithm=RandomWalkMH,
@@ -147,14 +199,25 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
         'seed': seed
     }
 
-def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, seed=42):
+def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, seed=42, **kwargs):
     """Run many simulations with different variance values, then save and plot the progression of ESJD and acceptance rate."""
-    print(f"\n{'='*60}")
-    print(f"Target: {target_name}, Dimension: {dim}, Samples: {num_iters}, Seed: {seed}")
-    print(f"{'='*60}")
     
-    target_distribution = get_target_distribution(target_name, dim, use_torch=True)
-    var_value_range = np.linspace(0.001, var_max, 40)
+    # Handle HybridRosenbrock dimension calculation
+    if target_name == "HybridRosenbrock":
+        n1 = kwargs.get('n1', 3)
+        n2 = kwargs.get('n2', 5)
+        actual_dim = calculate_hybrid_rosenbrock_dim(n1, n2)
+        print(f"\n{'='*60}")
+        print(f"Target: {target_name}, n1={n1}, n2={n2}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Seed: {seed}")
+        print(f"{'='*60}")
+    else:
+        actual_dim = dim
+        print(f"\n{'='*60}")
+        print(f"Target: {target_name}, Dimension: {dim}, Samples: {num_iters}, Seed: {seed}")
+        print(f"{'='*60}")
+    
+    target_distribution = get_target_distribution(target_name, dim, use_torch=True, **kwargs)
+    var_value_range = np.linspace(0.01, var_max, 40)
     
     acceptance_rates = []
     expected_squared_jump_distances = []
@@ -165,15 +228,15 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     total_start = time.time()
     
     # Use tqdm for progress bar
-    for i, var in enumerate(tqdm.tqdm(var_value_range, desc="Running RWM with different variance values", unit="config")):
-        variance = (var ** 2) / (dim ** (1))
+    for i, var in enumerate(tqdm.tqdm(var_value_range, desc="Running RWM with current variance =", unit="config")):
+        proposal_variance = (var ** 2) / (actual_dim ** (1))
         iteration_start = time.time()
         
         simulation = MCMCSimulation_GPU(
-            dim=dim,
-            sigma=variance,
+            dim=actual_dim,
+            sigma=proposal_variance,
             num_iterations=num_iters,
-            algorithm=RandomWalkMH_GPU,
+            algorithm=RandomWalkMH_GPU_Optimized,
             target_dist=target_distribution,
             symmetric=True,
             pre_allocate=True,
@@ -205,7 +268,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     # Save results
     data = {
         'target_distribution': target_name,
-        'dimension': dim,
+        'dimension': actual_dim,
         'num_iterations': num_iters,
         'seed': seed,
         'total_time': total_time,
@@ -218,7 +281,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         'times': times
     }
     
-    filename = f"data/{target_name}_RWM_GPU_dim{dim}_{num_iters}iters_seed{seed}.json"
+    filename = f"data/{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.json"
     with open(filename, "w") as file:
         json.dump(data, file, indent=2)
     print(f"   Results saved to: {filename}")
@@ -230,9 +293,9 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
     plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
-    plt.title(f'ESJD vs acceptance rate (dim={dim}, seed={seed})')
+    plt.title(f'ESJD vs acceptance rate (dim={actual_dim}, seed={seed})')
     plt.legend()
-    output_filename = f"images/ESJD_vs_acceptance_rate_{target_name}_RWM_GPU_dim{dim}_{num_iters}iters_seed{seed}"
+    output_filename = f"images/ESJD_vs_acceptance_rate_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}"
     plt.savefig(output_filename, dpi=300, bbox_inches='tight')
     plt.clf()
     plt.close()
@@ -242,8 +305,8 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     plt.plot(var_value_range, acceptance_rates, label='Acceptance rate', marker='x')
     plt.xlabel('Variance value (value^2 / dim)')
     plt.ylabel('Acceptance rate')
-    plt.title(f'Acceptance rate for different variance values (dim={dim}, seed={seed})')
-    filename = f"images/AcceptvsVar_{target_name}_RWM_GPU_dim{dim}_{num_iters}iters_seed{seed}"
+    plt.title(f'Acceptance rate for different variance values (dim={actual_dim}, seed={seed})')
+    filename = f"images/AcceptvsVar_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}"
     plt.savefig(filename)
     plt.clf()
     print(f"   Plot 2 created and saved as '{filename}'")
@@ -252,8 +315,8 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     plt.plot(var_value_range, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')
     plt.xlabel('Variance value (value^2 / dim)')
     plt.ylabel('ESJD')
-    plt.title(f'ESJD for different variance values (dim={dim}, seed={seed})')
-    filename = f"images/ESJDvsVar_{target_name}_RWM_GPU_dim{dim}_{num_iters}iters_seed{seed}"
+    plt.title(f'ESJD for different variance values (dim={actual_dim}, seed={seed})')
+    filename = f"images/ESJDvsVar_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}"
     plt.savefig(filename)
     plt.clf()
     print(f"   Plot 3 created and saved as '{filename}'")
@@ -270,6 +333,8 @@ if __name__ == "__main__":
     parser.add_argument("--mode", type=str, default="default", 
                        choices=["default", "comparison", "benchmark"],
                        help="Mode: default (run study), comparison (GPU vs CPU), or benchmark")
+    parser.add_argument("--hybrid_rosenbrock_n1", type=int, default=3, help="Block length parameter for HybridRosenbrock")
+    parser.add_argument("--hybrid_rosenbrock_n2", type=int, default=5, help="Number of blocks/rows for HybridRosenbrock")
     
     args = parser.parse_args()
     
@@ -280,14 +345,18 @@ if __name__ == "__main__":
     else:
         print("⚠️  No GPU detected. Running on CPU (will be slower)")
     
+    kwargs = {}
+    if args.target == "HybridRosenbrock":
+        kwargs['n1'] = args.hybrid_rosenbrock_n1
+        kwargs['n2'] = args.hybrid_rosenbrock_n2
     
     if args.mode == "default":
         # Parameter optimization study
-        results = run_study(args.dim, args.target, args.num_iters, args.var_max, args.seed)
+        results = run_study(args.dim, args.target, args.num_iters, args.var_max, args.seed, **kwargs)
         
     elif args.mode == "comparison":
         # Performance comparison
-        results = run_performance_comparison(args.dim, args.num_iters, args.target, args.seed)
+        results = run_performance_comparison(args.dim, args.num_iters, args.target, args.seed, **kwargs)
         
     elif args.mode == "benchmark":
         # Comprehensive benchmark
@@ -303,7 +372,7 @@ if __name__ == "__main__":
         for dim in dimensions:
             for num_samples in sample_sizes:
                 print(f"\nBenchmarking: dim={dim}, samples={num_samples}")
-                result = run_performance_comparison(dim, num_samples, args.target, args.seed)
+                result = run_performance_comparison(dim, num_samples, args.target, args.seed, **kwargs)
                 result.update({'dim': dim, 'num_samples': num_samples})
                 benchmark_results.append(result)
         
@@ -321,5 +390,4 @@ if __name__ == "__main__":
         
         print(f"\n🎯 Benchmark completed! Results saved to: {benchmark_filename}")
     
-    print(f"\n✅ GPU optimization analysis complete!")
-    print(f"💡 Your Metropolis algorithm should now run {10}-{100}x faster with GPU acceleration!") 
+    print(f"Finished running experiment.") 

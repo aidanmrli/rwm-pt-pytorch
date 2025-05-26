@@ -15,7 +15,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from target_distributions import (
     MultivariateNormalTorch, HypercubeTorch, 
     ThreeMixtureDistributionTorch, RoughCarpetDistributionTorch,
-    IIDGammaTorch, IIDBetaTorch
+    IIDGammaTorch, IIDBetaTorch,
+    FullRosenbrockTorch, EvenRosenbrockTorch, HybridRosenbrockTorch
 )
 
 def test_distribution(dist_class, dist_name, *args, **kwargs):
@@ -28,7 +29,12 @@ def test_distribution(dist_class, dist_name, *args, **kwargs):
         print(f"✓ Created {dist.get_name()}")
         
         # Test single point evaluation
-        dim = args[0] if args else 2
+        if dist_name == "HybridRosenbrockTorch":
+            # For HybridRosenbrockTorch, dim = 1 + n2 * (n1 - 1)
+            n1, n2 = args[0], args[1]
+            dim = 1 + n2 * (n1 - 1)
+        else:
+            dim = args[0] if args else 2
         if 'Beta' in dist_name:
             x_single = torch.rand(dim, device=dist.device, dtype=torch.float32) * 0.8 + 0.1  # (0.1, 0.9)
         elif 'Gamma' in dist_name:
@@ -110,6 +116,9 @@ def main():
         (RoughCarpetDistributionTorch, "RoughCarpetDistributionTorch (scaled)", dim, True),
         (IIDGammaTorch, "IIDGammaTorch", dim),
         (IIDBetaTorch, "IIDBetaTorch", dim),
+        (FullRosenbrockTorch, "FullRosenbrockTorch", dim),
+        (EvenRosenbrockTorch, "EvenRosenbrockTorch", 6),  # Must be even dimension
+        (HybridRosenbrockTorch, "HybridRosenbrockTorch", 3, 2),  # n1=3, n2=2 -> dim=1+2*(3-1)=5
     ]
     
     # Run tests
@@ -120,9 +129,17 @@ def main():
         if len(test_args) == 3:
             dist_class, name, dim_arg = test_args
             success = test_distribution(dist_class, name, dim_arg, device=device)
+        elif len(test_args) == 4:
+            dist_class, name, arg1, arg2 = test_args
+            if name == "HybridRosenbrockTorch":
+                # HybridRosenbrockTorch takes n1, n2 parameters
+                success = test_distribution(dist_class, name, arg1, arg2, device=device)
+            else:
+                # Other distributions with scaling parameter
+                success = test_distribution(dist_class, name, arg1, arg2, device=device)
         else:
-            dist_class, name, dim_arg, scaling = test_args
-            success = test_distribution(dist_class, name, dim_arg, scaling, device=device)
+            # Handle other cases if needed
+            success = test_distribution(*test_args, device=device)
         
         if success:
             passed += 1

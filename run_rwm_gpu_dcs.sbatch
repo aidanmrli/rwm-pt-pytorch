@@ -26,21 +26,16 @@ mkdir -p logs
 # RoughCarpet, RoughCarpetScaled, 
 # ThreeMixture, ThreeMixtureScaled, 
 # IIDGamma, IIDBeta, Hypercube
-TARGET_DISTRIBUTION="Hypercube"
-echo "Starting RWM GPU study for $TARGET_DISTRIBUTION distribution"
-echo "Job ID: $SLURM_JOB_ID"
-echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
-echo "Seed: $SLURM_ARRAY_TASK_ID"
-echo "Node: $SLURMD_NODENAME"
-echo "GPU: $CUDA_VISIBLE_DEVICES"
+# FullRosenbrock, EvenRosenbrock, HybridRosenbrock
+TARGET_DISTRIBUTION="HybridRosenbrock"
 
-# Run the experiment with default parameters but varying seed
 python experiment_RWM_GPU.py \
     --target $TARGET_DISTRIBUTION \
-    --dim 50 \
+    --dim 10 \
     --num_iters 100000 \
-    --var_max 1.0 \
-    --mode default \
+    --var_max 1.5 \
+    --hybrid_rosenbrock_n1 2 \
+    --hybrid_rosenbrock_n2 3 \
     --seed $SLURM_ARRAY_TASK_ID
 
 echo "Completed RWM GPU study for seed $SLURM_ARRAY_TASK_ID" 
