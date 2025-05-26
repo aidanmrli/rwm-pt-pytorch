@@ -51,7 +51,7 @@ The codebase follows a modular, interface-based design adhering to SOLID princip
 3. **Target Distributions** (`target_distributions/`): Test distributions
    - Unimodal: MultivariateNormal, Hypercube, IID products
    - Multimodal: ThreeMixture, RoughCarpet with optional scaling
-   - Rosenbrock: Full, Even, and Hybrid variants for MCMC testing. See Pagani et al. (2022) for details.
+   - Rosenbrock: Full, Even, and Hybrid variants for MCMC testing. See Pagani et al. (2022) for details. "An n-dimensional Rosenbrock Distribution for MCMC testing"
 
 4. **Experimental Framework**: Scripts for systematic studies
    - `experiment_RWM.py`: Comprehensive RWM parameter sweeps
