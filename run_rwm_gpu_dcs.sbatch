@@ -6,14 +6,17 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=10G
+#SBATCH --mem=20G
 #SBATCH --gres=gpu:1
-#SBATCH --nodelist=concerto[1-3],overture
-#SBATCH --array=1-10
+#SBATCH --nodelist=quartet[1-3,5],dgx1,sonata2
+#SBATCH --array=1-30
 #SBATCH --output=logs/rwm_%j.out
 #SBATCH --error=logs/rwm_%j.err
 
-# Options for GPU: quartet[1-3,5],dgx1,sonata2,bulbasaur,charmander,squirtle
+#
+# Options for GPU: 
+# concerto[1-3],overture
+# quartet[1-3,5],dgx1,sonata2,bulbasaur,charmander,squirtle
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
@@ -31,11 +34,11 @@ TARGET_DISTRIBUTION="HybridRosenbrock"
 
 python experiment_RWM_GPU.py \
     --target $TARGET_DISTRIBUTION \
-    --dim 10 \
+    --dim 20 \
     --num_iters 100000 \
-    --var_max 1.5 \
-    --hybrid_rosenbrock_n1 2 \
-    --hybrid_rosenbrock_n2 3 \
+    --var_max 1.0 \
+    --hybrid_rosenbrock_n1 3 \
+    --hybrid_rosenbrock_n2 2 \
     --seed $SLURM_ARRAY_TASK_ID
 
 echo "Completed RWM GPU study for seed $SLURM_ARRAY_TASK_ID" 

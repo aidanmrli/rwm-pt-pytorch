@@ -41,7 +41,7 @@ def create_plot(data, filename):
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs acceptance rate (dim={dim})')
     plt.legend()
-    output_filename = f"images/revision/ESJD_vs_acceptance_rate_{os.path.splitext(filename)[0]}.png"
+    output_filename = f"images/averaged/ESJD_vs_acceptance_rate_{os.path.splitext(filename)[0]}.png"
     plt.savefig(output_filename, dpi=300, bbox_inches='tight')
     plt.clf()
     plt.close()
@@ -50,7 +50,7 @@ def create_plot(data, filename):
 # Function to process all JSON files in a directory
 def process_directory(directory_path):
     for filename in os.listdir(directory_path):
-        if filename.endswith('.json'):
+        if filename.endswith('averaged.json'):
             file_path = os.path.join(directory_path, filename)
             try:
                 data = read_json(file_path)
