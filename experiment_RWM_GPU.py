@@ -8,6 +8,7 @@ from target_distributions import *
 import matplotlib.pyplot as plt
 import json
 import tqdm
+import os
 
 def calculate_hybrid_rosenbrock_dim(n1, n2):
     """Calculate the dimension for HybridRosenbrock: 1 + n2 * (n1 - 1)"""
@@ -286,41 +287,68 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         json.dump(data, file, indent=2)
     print(f"   Results saved to: {filename}")
     
-    # Create separate plots with consistent styling from original experiment
+    # Create traceplot using optimal variance
+    print(f"\nGenerating traceplot with optimal variance ({max_variance_value:.6f})...")
+    optimal_proposal_variance = (max_variance_value ** 2) / (actual_dim ** (1))
     
-    # Plot 1: ESJD vs Acceptance Rate
-    plt.plot(acceptance_rates, expected_squared_jump_distances, marker='x')   
-    plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
-    plt.xlabel('acceptance rate')
-    plt.ylabel('ESJD')
-    plt.title(f'ESJD vs acceptance rate (dim={actual_dim}, seed={seed})')
-    plt.legend()
-    output_filename = f"images/ESJD_vs_acceptance_rate_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}"
+    # Run one more simulation with optimal variance to get chain for traceplot
+    traceplot_simulation = MCMCSimulation_GPU(
+        dim=actual_dim,
+        sigma=optimal_proposal_variance,
+        num_iterations=num_iters,
+        algorithm=RandomWalkMH_GPU_Optimized,
+        target_dist=target_distribution,
+        symmetric=True,
+        pre_allocate=True,
+        seed=seed
+    )
+    
+    traceplot_chain = traceplot_simulation.generate_samples(progress_bar=False)
+    
+    # Create traceplot figure
+    plt.figure(figsize=(12, 8))
+    
+    # Get chain data - use GPU tensor if available for efficiency
+    if hasattr(traceplot_simulation.algorithm, 'get_chain_gpu'):
+        chain_data = traceplot_simulation.algorithm.get_chain_gpu().cpu().numpy()
+    else:
+        chain_data = np.array(traceplot_simulation.algorithm.chain)
+    
+    # Determine number of dimensions to plot (max 3)
+    num_dims_to_plot = min(3, actual_dim)
+    
+    if num_dims_to_plot == 1:
+        # Single dimension plot
+        plt.plot(chain_data[:, 0], alpha=0.7, linewidth=0.5, color='blue')
+        plt.xlabel('Iteration')
+        plt.ylabel('Value')
+        plt.title(f'Traceplot - {target_name} (Dimension 1)\nOptimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+        plt.grid(True, alpha=0.3)
+    else:
+        # Multiple dimensions subplot
+        for i in range(num_dims_to_plot):
+            plt.subplot(num_dims_to_plot, 1, i + 1)
+            plt.plot(chain_data[:, i], alpha=0.7, linewidth=0.5, color=f'C{i}')
+            plt.ylabel(f'Dimension {i + 1}')
+            plt.grid(True, alpha=0.3)
+            
+            if i == 0:
+                plt.title(f'Traceplot - {target_name} (First {num_dims_to_plot} dimensions)\nOptimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+            if i == num_dims_to_plot - 1:
+                plt.xlabel('Iteration')
+    
+    plt.tight_layout()
+    
+    # Ensure images directory exists
+    os.makedirs("images", exist_ok=True)
+    
+    # Save traceplot
+    output_filename = f"images/traceplot_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
     plt.savefig(output_filename, dpi=300, bbox_inches='tight')
     plt.clf()
     plt.close()
-    print(f"   Plot 1 created and saved as '{output_filename}'")
+    print(f"   Traceplot created and saved as '{output_filename}'")
 
-    # Plot 2: Acceptance Rate vs Variance
-    plt.plot(var_value_range, acceptance_rates, label='Acceptance rate', marker='x')
-    plt.xlabel('Variance value (value^2 / dim)')
-    plt.ylabel('Acceptance rate')
-    plt.title(f'Acceptance rate for different variance values (dim={actual_dim}, seed={seed})')
-    filename = f"images/AcceptvsVar_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}"
-    plt.savefig(filename)
-    plt.clf()
-    print(f"   Plot 2 created and saved as '{filename}'")
-
-    # Plot 3: ESJD vs Variance
-    plt.plot(var_value_range, expected_squared_jump_distances, label='Expected squared jump distance', marker='x')
-    plt.xlabel('Variance value (value^2 / dim)')
-    plt.ylabel('ESJD')
-    plt.title(f'ESJD for different variance values (dim={actual_dim}, seed={seed})')
-    filename = f"images/ESJDvsVar_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}"
-    plt.savefig(filename)
-    plt.clf()
-    print(f"   Plot 3 created and saved as '{filename}'")
-    
     return data
 
 if __name__ == "__main__":
@@ -339,7 +367,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if torch.cuda.is_available():
-        print(f"🚀 GPU detected: {torch.cuda.get_device_name()}")
+        print(f" GPU detected: {torch.cuda.get_device_name()}")
         print(f"   CUDA version: {torch.version.cuda}")
         print(f"   GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
     else:
