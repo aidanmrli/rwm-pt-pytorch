@@ -80,7 +80,7 @@ def get_target_distribution(name, dim, use_torch=True, **kwargs):
         else:
             raise ValueError("Unknown target distribution name")
 
-def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTorch", seed=42, **kwargs):
+def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTorch", seed=42, burn_in=1000, **kwargs):
     """Compare GPU vs CPU performance for a single configuration."""
     
     # Handle HybridRosenbrock dimension calculation
@@ -89,12 +89,12 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
         n2 = kwargs.get('n2', 5)
         actual_dim = calculate_hybrid_rosenbrock_dim(n1, n2)
         print(f"\n{'='*60}")
-        print(f"PERFORMANCE COMPARISON: {target_name} (n1={n1}, n2={n2}, actual_dim={actual_dim}, samples={num_iters}, seed={seed})")
+        print(f"PERFORMANCE COMPARISON: {target_name} (n1={n1}, n2={n2}, actual_dim={actual_dim}, samples={num_iters}, burn_in={burn_in}, seed={seed})")
         print(f"{'='*60}")
     else:
         actual_dim = dim
         print(f"\n{'='*60}")
-        print(f"PERFORMANCE COMPARISON: {target_name} (dim={dim}, samples={num_iters}, seed={seed})")
+        print(f"PERFORMANCE COMPARISON: {target_name} (dim={dim}, samples={num_iters}, burn_in={burn_in}, seed={seed})")
         print(f"{'='*60}")
     
     # Test variance (roughly optimal for high dimensions)
@@ -113,7 +113,8 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
         target_dist=target_dist_gpu,
         symmetric=True,
         pre_allocate=True,
-        seed=seed
+        seed=seed,
+        burn_in=burn_in
     )
     
     chain_gpu = simulation_gpu.generate_samples(progress_bar=False)
@@ -156,7 +157,8 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
         algorithm=RandomWalkMH,
         target_dist=target_dist_cpu,
         symmetric=True,
-        seed=seed
+        seed=seed,
+        burn_in=burn_in
     )
     
     chain_cpu = simulation_cpu.generate_samples()
@@ -200,7 +202,7 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
         'seed': seed
     }
 
-def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, seed=42, **kwargs):
+def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, seed=42, burn_in=1000, **kwargs):
     """Run many simulations with different variance values, then save and plot the progression of ESJD and acceptance rate."""
     
     # Handle HybridRosenbrock dimension calculation
@@ -209,12 +211,12 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         n2 = kwargs.get('n2', 5)
         actual_dim = calculate_hybrid_rosenbrock_dim(n1, n2)
         print(f"\n{'='*60}")
-        print(f"Target: {target_name}, n1={n1}, n2={n2}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Seed: {seed}")
+        print(f"Target: {target_name}, n1={n1}, n2={n2}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     else:
         actual_dim = dim
         print(f"\n{'='*60}")
-        print(f"Target: {target_name}, Dimension: {dim}, Samples: {num_iters}, Seed: {seed}")
+        print(f"Target: {target_name}, Dimension: {dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     
     target_distribution = get_target_distribution(target_name, dim, use_torch=True, **kwargs)
@@ -241,7 +243,8 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
             target_dist=target_distribution,
             symmetric=True,
             pre_allocate=True,
-            seed=seed
+            seed=seed,
+            burn_in=1000
         )
         
         chain = simulation.generate_samples(progress_bar=False)
@@ -300,7 +303,8 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         target_dist=target_distribution,
         symmetric=True,
         pre_allocate=True,
-        seed=seed
+        seed=seed,
+        burn_in=1000
     )
     
     traceplot_chain = traceplot_simulation.generate_samples(progress_bar=False)
@@ -313,6 +317,11 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         chain_data = traceplot_simulation.algorithm.get_chain_gpu().cpu().numpy()
     else:
         chain_data = np.array(traceplot_simulation.algorithm.chain)
+    
+    # Apply burn-in (skip first 1000 samples for visualization)
+    burn_in_samples = 1000  # Use 10% or 1000, whichever is smaller
+    if len(chain_data) > burn_in_samples:
+        chain_data = chain_data[burn_in_samples:]
     
     # Determine number of dimensions to plot (max 3)
     num_dims_to_plot = min(3, actual_dim)
@@ -359,12 +368,12 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         x_chain = chain_data[:, 0]
         y_chain = chain_data[:, 1]
         
-        # Determine plot bounds based on chain data with some padding
+        # Determine plot bounds based on chain data with very minimal padding
         x_min, x_max = np.min(x_chain), np.max(x_chain)
         y_min, y_max = np.min(y_chain), np.max(y_chain)
         x_range = x_max - x_min
         y_range = y_max - y_min
-        padding = 0.3  # 30% padding
+        padding = 0.02  # 2% padding
         
         x_plot_min = x_min - padding * x_range
         x_plot_max = x_max + padding * x_range
@@ -419,39 +428,33 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
                     Z[i, j] = 1e-10
         
         # Create contour plot of target density
-        contour = plt.contourf(X, Y, Z, levels=20, cmap='viridis', alpha=0.7)
+        contour = plt.contourf(X, Y, Z, levels=20, cmap='Greys', alpha=0.7)
         plt.colorbar(contour, label='Target Density')
         
         # Add contour lines for better visualization
         plt.contour(X, Y, Z, levels=10, colors='white', alpha=0.3, linewidths=0.5)
         
         # Plot MCMC trajectory
-        # Use a subset of points for better visualization if chain is very long
-        max_points = 2000
-        if len(x_chain) > max_points:
-            indices = np.linspace(0, len(x_chain)-1, max_points, dtype=int)
+        # Use 5% of total samples for trajectory visualization
+        num_traj_points = int(0.05 * len(x_chain))
+        if len(x_chain) > num_traj_points:
+            indices = np.linspace(0, len(x_chain)-1, num_traj_points, dtype=int)
             x_traj = x_chain[indices]
             y_traj = y_chain[indices]
         else:
             x_traj = x_chain
             y_traj = y_chain
         
-        # Plot trajectory as line with dots
-        plt.plot(x_traj, y_traj, 'r-', alpha=0.6, linewidth=0.8, label='MCMC Trajectory')
-        plt.scatter(x_traj[::max(1, len(x_traj)//100)], y_traj[::max(1, len(y_traj)//100)], 
-                   c='red', s=8, alpha=0.8, zorder=5)
-        
-        # Highlight start and end points
-        plt.scatter(x_traj[0], y_traj[0], c='lime', s=50, marker='o', 
-                   label='Start', zorder=6, edgecolors='black', linewidth=1)
-        plt.scatter(x_traj[-1], y_traj[-1], c='orange', s=50, marker='s', 
-                   label='End', zorder=6, edgecolors='black', linewidth=1)
+        # Plot trajectory as very thin line with smaller, less frequent dots
+        # plt.plot(x_traj, y_traj, 'r-', alpha=0.4, linewidth=0.3, label='MCMC Trajectory')
+        plt.scatter(x_traj[::max(1, len(x_traj)//200)], y_traj[::max(1, len(y_traj)//200)], 
+                   c='red', s=3, alpha=0.6, zorder=5, label='MCMC Samples')
         
         plt.xlabel('Dimension 1')
         plt.ylabel('Dimension 2')
-        plt.title(f'2D Target Density with MCMC Trajectory - {target_name}\n'
+        plt.title(f'2D Target Density with MCMC Samples - {target_name}\n'
                  f'Optimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
-        plt.legend()
+        # plt.legend()
         plt.grid(True, alpha=0.3)
         
         # Save 2D visualization

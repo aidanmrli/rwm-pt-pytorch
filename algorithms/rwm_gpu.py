@@ -15,9 +15,11 @@ class RandomWalkMH_GPU(MHAlgorithm):
     
     def __init__(self, dim: int, var: float, 
                  target_dist: TorchTargetDistribution | TargetDistribution = None, 
-                 symmetric: bool = True, 
+                 symmetric: bool = True,
+                 burn_in: int = 0, 
                  beta: float = 1.0, beta_ladder: float = None, swap_acceptance_rate: float = None,
-                 device: str = None, pre_allocate_steps: int = None, standard_rwm: bool = True):
+                 device: str = None, pre_allocate_steps: int = None, standard_rwm: bool = True,
+                 ):
         """Initialize the GPU-accelerated RandomWalkMH algorithm.
         
         Args:
@@ -26,10 +28,12 @@ class RandomWalkMH_GPU(MHAlgorithm):
             target_dist: Target distribution to sample from (TargetDistribution or TorchTargetDistribution)
             symmetric: Whether proposal distribution is symmetric
             beta: Temperature parameter (inverse)
+            burn_in: Number of initial samples to discard for MCMC burn-in (default: 0)
             device: PyTorch device ('cuda', 'cpu', or None for auto-detect)
             pre_allocate_steps: Pre-allocate memory for this many steps (None for dynamic).
             NOTE: This should be set to the number of samples you want to generate.
             standard_rwm: If True, use standard RWM (sequential). 
+            
         """
         super().__init__(dim, var, target_dist, symmetric)
         
@@ -55,12 +59,15 @@ class RandomWalkMH_GPU(MHAlgorithm):
         self.num_acceptances = 0
         self.acceptance_rate = 0
         self.total_steps = 0
+        self.burn_in = max(0, burn_in)
         
         # Pre-allocate memory if requested
         self.pre_allocate_steps = pre_allocate_steps
         if pre_allocate_steps:
+            # Allocate memory for burn_in + pre_allocate_steps + 1 (initial state)
+            total_allocation = self.burn_in + pre_allocate_steps + 1
             self.pre_allocated_chain = torch.zeros(
-                (pre_allocate_steps + 1, dim), 
+                (total_allocation, dim), 
                 device=self.device, 
                 dtype=torch.float32
             )
@@ -139,16 +146,19 @@ class RandomWalkMH_GPU(MHAlgorithm):
         proposal = self._generate_single_proposal()
         log_accept_ratio, log_density_proposed = self._compute_acceptance_ratio(proposal)
         accept = self._make_single_acceptance_decision(log_accept_ratio)
-        
+        self.total_steps += 1
+
         if accept:
             self.current_state = proposal
             self.log_target_density_current = log_density_proposed.item()
-            self.num_acceptances += 1
+            if self.total_steps > self.burn_in:
+                self.num_acceptances += 1
         
-        # Add to chain and update statistics
         self._add_to_chain(self.current_state)
-        self.total_steps += 1
-        self.acceptance_rate = self.num_acceptances / self.total_steps
+        if self.total_steps > self.burn_in:
+            post_burnin_steps = self.total_steps - self.burn_in
+            if post_burnin_steps > 0:
+                self.acceptance_rate = self.num_acceptances / post_burnin_steps
     
     def _generate_single_proposal(self):
         """Generate a single proposal state using GPU operations."""
@@ -278,35 +288,48 @@ class RandomWalkMH_GPU(MHAlgorithm):
         """Generate samples using standard sequential RWM with GPU acceleration.
         
         Args:
-            num_samples: Total number of samples to generate
+            num_samples: Total number of samples to generate (AFTER burn-in)
             
         Returns:
-            Chain of samples as a torch tensor
+            Chain of samples as a torch tensor (EXCLUDING burn-in samples)
         """
-        print(f"Generating {num_samples} samples using standard RWM with GPU acceleration")
+        print(f"Generating {num_samples} samples (+ {self.burn_in} burn-in) using standard RWM with GPU acceleration")
         
         # Pre-compute all increments for maximum GPU efficiency
-        self._precompute_increments(num_samples)
+        total_steps = self.burn_in + num_samples
+        self._precompute_increments(total_steps)
         
-        for i in range(num_samples):
+        for i in range(total_steps):
             self._standard_step()
             
             if (i + 1) % 1000 == 0:
-                print(f"Generated {i + 1}/{num_samples} samples "
-                      f"(Accept rate: {self.acceptance_rate:.3f})")
+                if self.total_steps > self.burn_in:
+                    print(f"Generated {i + 1}/{total_steps} samples "
+                          f"(Accept rate: {self.acceptance_rate:.3f})")
+                else:
+                    print(f"Burn-in: {i + 1}/{self.burn_in} samples")
         
         # Return the correct chain based on allocation method
         if self.pre_allocated_chain is not None:
-            return self.pre_allocated_chain[:self.chain_index]
+            # Return only post-burn-in samples
+            return self.pre_allocated_chain[self.burn_in:self.chain_index]
         else:
-            return self.chain
+            # Return only post-burn-in samples
+            return self.chain[self.burn_in:]
     
     def expected_squared_jump_distance_gpu(self):
-        """Compute ESJD using GPU tensors for efficiency."""
+        """Compute ESJD using GPU tensors for efficiency, removing burn-in samples."""
         if self.pre_allocated_chain is not None and self.chain_index > 1:
-            chain_tensor = self.pre_allocated_chain[:self.chain_index]
+            if self.chain_index > self.burn_in:
+                chain_tensor = self.pre_allocated_chain[self.burn_in:self.chain_index]
+            else:
+                raise ValueError(f"Insufficient post-burn-in samples: chain_index={self.chain_index}, burn_in={self.burn_in}. Need at least {self.burn_in + 2} total samples.")
         else:
             chain_tensor = self.get_chain_gpu()
+            if chain_tensor.shape[0] > self.burn_in + 1:  # Need at least 2 post-burn-in samples
+                chain_tensor = chain_tensor[self.burn_in:]
+            else:
+                raise ValueError(f"Insufficient post-burn-in samples: total_samples={chain_tensor.shape[0]}, burn_in={self.burn_in}. Need at least {self.burn_in + 2} total samples.")
         
         if chain_tensor.shape[0] < 2:
             return 0.0
@@ -317,16 +340,16 @@ class RandomWalkMH_GPU(MHAlgorithm):
         
         return torch.mean(squared_jumps).item()
     
-    def _precompute_increments(self, num_samples):
+    def _precompute_increments(self, total_steps):
         """Pre-compute all random increments for efficient proposal generation.
         
         Args:
-            num_samples: Number of increments to pre-compute
+            total_steps: Total number of increments to pre-compute (including burn-in)
         """
-        print(f"Pre-computing {num_samples} random increments for GPU optimization...")
+        print(f"Pre-computing {total_steps} random increments for GPU optimization...")
         
         # Generate all random increments at once: increments ~ N(0, I)
-        raw_increments = torch.randn(num_samples, self.dim, device=self.device, dtype=torch.float32)
+        raw_increments = torch.randn(total_steps, self.dim, device=self.device, dtype=torch.float32)
         
         # Apply covariance structure: increments = chol @ raw_increments^T
         self.precomputed_increments = torch.matmul(raw_increments, self.proposal_cov_chol.T)
