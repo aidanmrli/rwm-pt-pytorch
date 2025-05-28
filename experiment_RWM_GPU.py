@@ -80,7 +80,7 @@ def get_target_distribution(name, dim, use_torch=True, **kwargs):
         else:
             raise ValueError("Unknown target distribution name")
 
-def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTorch", seed=42, **kwargs):
+def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTorch", seed=42, burn_in=1000, **kwargs):
     """Compare GPU vs CPU performance for a single configuration."""
     
     # Handle HybridRosenbrock dimension calculation
@@ -89,12 +89,12 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
         n2 = kwargs.get('n2', 5)
         actual_dim = calculate_hybrid_rosenbrock_dim(n1, n2)
         print(f"\n{'='*60}")
-        print(f"PERFORMANCE COMPARISON: {target_name} (n1={n1}, n2={n2}, actual_dim={actual_dim}, samples={num_iters}, seed={seed})")
+        print(f"PERFORMANCE COMPARISON: {target_name} (n1={n1}, n2={n2}, actual_dim={actual_dim}, samples={num_iters}, burn_in={burn_in}, seed={seed})")
         print(f"{'='*60}")
     else:
         actual_dim = dim
         print(f"\n{'='*60}")
-        print(f"PERFORMANCE COMPARISON: {target_name} (dim={dim}, samples={num_iters}, seed={seed})")
+        print(f"PERFORMANCE COMPARISON: {target_name} (dim={dim}, samples={num_iters}, burn_in={burn_in}, seed={seed})")
         print(f"{'='*60}")
     
     # Test variance (roughly optimal for high dimensions)
@@ -113,7 +113,8 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
         target_dist=target_dist_gpu,
         symmetric=True,
         pre_allocate=True,
-        seed=seed
+        seed=seed,
+        burn_in=burn_in
     )
     
     chain_gpu = simulation_gpu.generate_samples(progress_bar=False)
@@ -156,7 +157,8 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
         algorithm=RandomWalkMH,
         target_dist=target_dist_cpu,
         symmetric=True,
-        seed=seed
+        seed=seed,
+        burn_in=burn_in
     )
     
     chain_cpu = simulation_cpu.generate_samples()
@@ -200,7 +202,7 @@ def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTo
         'seed': seed
     }
 
-def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, seed=42, **kwargs):
+def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, seed=42, burn_in=1000, **kwargs):
     """Run many simulations with different variance values, then save and plot the progression of ESJD and acceptance rate."""
     
     # Handle HybridRosenbrock dimension calculation
@@ -209,12 +211,12 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         n2 = kwargs.get('n2', 5)
         actual_dim = calculate_hybrid_rosenbrock_dim(n1, n2)
         print(f"\n{'='*60}")
-        print(f"Target: {target_name}, n1={n1}, n2={n2}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Seed: {seed}")
+        print(f"Target: {target_name}, n1={n1}, n2={n2}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     else:
         actual_dim = dim
         print(f"\n{'='*60}")
-        print(f"Target: {target_name}, Dimension: {dim}, Samples: {num_iters}, Seed: {seed}")
+        print(f"Target: {target_name}, Dimension: {dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     
     target_distribution = get_target_distribution(target_name, dim, use_torch=True, **kwargs)
@@ -241,7 +243,8 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
             target_dist=target_distribution,
             symmetric=True,
             pre_allocate=True,
-            seed=seed
+            seed=seed,
+            burn_in=1000
         )
         
         chain = simulation.generate_samples(progress_bar=False)
@@ -300,7 +303,8 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         target_dist=target_distribution,
         symmetric=True,
         pre_allocate=True,
-        seed=seed
+        seed=seed,
+        burn_in=1000
     )
     
     traceplot_chain = traceplot_simulation.generate_samples(progress_bar=False)
@@ -313,6 +317,11 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         chain_data = traceplot_simulation.algorithm.get_chain_gpu().cpu().numpy()
     else:
         chain_data = np.array(traceplot_simulation.algorithm.chain)
+    
+    # Apply burn-in (skip first 1000 samples for visualization)
+    burn_in_samples = 1000  # Use 10% or 1000, whichever is smaller
+    if len(chain_data) > burn_in_samples:
+        chain_data = chain_data[burn_in_samples:]
     
     # Determine number of dimensions to plot (max 3)
     num_dims_to_plot = min(3, actual_dim)
@@ -348,6 +357,112 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     plt.clf()
     plt.close()
     print(f"   Traceplot created and saved as '{output_filename}'")
+    
+    # Create 2D density visualization with MCMC trajectory overlay
+    if actual_dim >= 2:
+        print(f"Creating 2D density visualization with MCMC trajectory...")
+        
+        plt.figure(figsize=(10, 8))
+        
+        # Extract first two dimensions of the chain
+        x_chain = chain_data[:, 0]
+        y_chain = chain_data[:, 1]
+        
+        # Determine plot bounds based on chain data with very minimal padding
+        x_min, x_max = np.min(x_chain), np.max(x_chain)
+        y_min, y_max = np.min(y_chain), np.max(y_chain)
+        x_range = x_max - x_min
+        y_range = y_max - y_min
+        padding = 0.02  # 2% padding
+        
+        x_plot_min = x_min - padding * x_range
+        x_plot_max = x_max + padding * x_range
+        y_plot_min = y_min - padding * y_range
+        y_plot_max = y_max + padding * y_range
+        
+        # Create grid for density evaluation
+        x_grid = np.linspace(x_plot_min, x_plot_max, 100)
+        y_grid = np.linspace(y_plot_min, y_plot_max, 100)
+        X, Y = np.meshgrid(x_grid, y_grid)
+        
+        # Evaluate target density on the grid
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                # Create a point with the first two dimensions from the grid
+                # and remaining dimensions set to zero (or mean values)
+                point = np.zeros(actual_dim)
+                point[0] = X[i, j]
+                point[1] = Y[i, j]
+                
+                # For higher dimensions, use the mean of the chain for other dimensions
+                if actual_dim > 2:
+                    point[2:] = np.mean(chain_data[:, 2:], axis=0)
+                
+                # Evaluate density - handle both PyTorch and numpy distributions
+                try:
+                    if hasattr(target_distribution, 'density'):
+                        # Check if it's a PyTorch distribution that needs tensor input
+                        if hasattr(target_distribution, 'device') or isinstance(target_distribution, torch.nn.Module):
+                            point_tensor = torch.tensor(point, dtype=torch.float32, 
+                                                      device=getattr(target_distribution, 'device', 'cpu'))
+                            density_val = target_distribution.density(point_tensor)
+                            Z[i, j] = density_val.item() if torch.is_tensor(density_val) else density_val
+                        else:
+                            # CPU/numpy distribution
+                            Z[i, j] = target_distribution.density(point)
+                    elif hasattr(target_distribution, 'log_density'):
+                        # Convert log density to density
+                        if hasattr(target_distribution, 'device') or isinstance(target_distribution, torch.nn.Module):
+                            point_tensor = torch.tensor(point, dtype=torch.float32, 
+                                                      device=getattr(target_distribution, 'device', 'cpu'))
+                            log_dens = target_distribution.log_density(point_tensor)
+                            Z[i, j] = torch.exp(log_dens).item()
+                        else:
+                            Z[i, j] = np.exp(target_distribution.log_density(point))
+                    else:
+                        # Fallback: assume uniform density
+                        Z[i, j] = 1.0
+                except Exception as e:
+                    # If density evaluation fails, set to small positive value
+                    Z[i, j] = 1e-10
+        
+        # Create contour plot of target density
+        contour = plt.contourf(X, Y, Z, levels=20, cmap='Greys', alpha=0.7)
+        plt.colorbar(contour, label='Target Density')
+        
+        # Add contour lines for better visualization
+        plt.contour(X, Y, Z, levels=10, colors='white', alpha=0.3, linewidths=0.5)
+        
+        # Plot MCMC trajectory
+        # Use 5% of total samples for trajectory visualization
+        num_traj_points = int(0.05 * len(x_chain))
+        if len(x_chain) > num_traj_points:
+            indices = np.linspace(0, len(x_chain)-1, num_traj_points, dtype=int)
+            x_traj = x_chain[indices]
+            y_traj = y_chain[indices]
+        else:
+            x_traj = x_chain
+            y_traj = y_chain
+        
+        # Plot trajectory as very thin line with smaller, less frequent dots
+        # plt.plot(x_traj, y_traj, 'r-', alpha=0.4, linewidth=0.3, label='MCMC Trajectory')
+        plt.scatter(x_traj[::max(1, len(x_traj)//200)], y_traj[::max(1, len(y_traj)//200)], 
+                   c='red', s=3, alpha=0.6, zorder=5, label='MCMC Samples')
+        
+        plt.xlabel('Dimension 1')
+        plt.ylabel('Dimension 2')
+        plt.title(f'2D Target Density with MCMC Samples - {target_name}\n'
+                 f'Optimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+        # plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Save 2D visualization
+        density_filename = f"images/density2D_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
+        plt.savefig(density_filename, dpi=300, bbox_inches='tight')
+        plt.clf()
+        plt.close()
+        print(f"   2D density visualization created and saved as '{density_filename}'")
 
     return data
 

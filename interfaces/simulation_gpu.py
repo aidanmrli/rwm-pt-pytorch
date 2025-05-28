@@ -12,8 +12,10 @@ from .target_torch import TorchTargetDistribution
 
 class MCMCSimulation_GPU:
     """
-    GPU-accelerated MCMC simulation class with performance optimizations.
-    Provides significant speedup over the standard simulation class.
+    GPU-accelerated MCMC simulation framework with comprehensive performance optimization.
+    
+    This class provides a high-level interface for running MCMC simulations on GPU with
+    automatic device management, performance benchmarking, and result analysis.
     """
     
     def __init__(self, 
@@ -27,7 +29,8 @@ class MCMCSimulation_GPU:
                  beta_ladder: Optional[list] = None,
                  swap_acceptance_rate: Optional[float] = None,
                  device: Optional[str] = None,
-                 pre_allocate: bool = True):
+                 pre_allocate: bool = True,
+                 burn_in: int = 0):
         """
         Initialize GPU-accelerated MCMC simulation.
         
@@ -40,41 +43,46 @@ class MCMCSimulation_GPU:
             symmetric: Whether proposal is symmetric
             seed: Random seed
             beta_ladder: Temperature ladder for parallel tempering
-            swap_acceptance_rate: Swap acceptance rate for PT
-            device: PyTorch device ('cuda', 'cpu', or None for auto-detect)
-            pre_allocate: Whether to pre-allocate memory for chains
+            swap_acceptance_rate: Target swap acceptance rate for PT
+            device: GPU device to use ('cuda', 'cpu', or None for auto-detection)
+            pre_allocate: Whether to pre-allocate GPU memory for chains
+            burn_in: Number of initial samples to discard for MCMC burn-in (default: 0)
         """
         self.num_iterations = num_iterations
+        self.burn_in = max(0, min(burn_in, num_iterations - 1))
         self.target_dist = target_dist
-        self.pre_allocate = pre_allocate
         
         if device is None:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        
+        if hasattr(algorithm, '__name__') and 'GPU' in algorithm.__name__:
+            self.algorithm = algorithm(
+                dim, sigma, target_dist, symmetric, 
+                device=device, 
+                pre_allocate_steps=num_iterations if pre_allocate else None,
+                beta=beta_ladder[0] if beta_ladder else 1.0,
+                burn_in=burn_in
+            )
         else:
-            self.device = torch.device(device)
+            # Standard algorithm
+            self.algorithm = algorithm(
+                dim, sigma, target_dist, symmetric, 
+                beta_ladder=beta_ladder, 
+                swap_acceptance_rate=swap_acceptance_rate,
+                burn_in=burn_in
+            )
         
-        algorithm_kwargs = {
-            'dim': dim,
-            'var': sigma,
-            'target_dist': target_dist,
-            'symmetric': symmetric,
-            'device': self.device,
-        }
-        
-        if beta_ladder is not None:
-            algorithm_kwargs['beta_ladder'] = beta_ladder
-        if swap_acceptance_rate is not None:
-            algorithm_kwargs['swap_acceptance_rate'] = swap_acceptance_rate
-        if pre_allocate:
-            algorithm_kwargs['pre_allocate_steps'] = num_iterations
-            
-        self.algorithm = algorithm(**algorithm_kwargs)
-        
-        if seed:
-            np.random.seed(seed)
+        # Set random seed
+        if seed is not None:
             torch.manual_seed(seed)
+            np.random.seed(seed)
             if torch.cuda.is_available():
                 torch.cuda.manual_seed(seed)
+        
+        self.device = device
+        self.pre_allocate = pre_allocate
+        self._start_time = None
+        self._end_time = None
     
     def reset(self):
         """Reset the simulation to the initial state."""
@@ -122,26 +130,36 @@ class MCMCSimulation_GPU:
         return chain
     
     def acceptance_rate(self):
-        """Return the acceptance rate of the algorithm."""
+        """Return the acceptance rate of the algorithm, excluding burn-in samples."""
         if not self.has_run():
             raise ValueError("The algorithm has not been run yet.")
+        # The burn-in is already excluded in the acceptance rate calculation
         return self.algorithm.acceptance_rate
 
     def expected_squared_jump_distance(self):
         """
-        Calculate the expected squared jump distance using optimized GPU computation if available.
+        Calculate the expected squared jump distance using optimized GPU computation if available,
+        excluding burn-in samples.
         """
         if not self.has_run():
             raise ValueError("The algorithm has not been run yet.")
         
-        # Use GPU-accelerated ESJD computation if available
+        # Use GPU-accelerated ESJD computation if available.
+        # The burn-in is already excluded in the GPU ESJD calculation.
         if hasattr(self.algorithm, 'expected_squared_jump_distance_gpu'):
             return self.algorithm.expected_squared_jump_distance_gpu()
         else:
             # Fall back to CPU computation
             chain = np.array(self.algorithm.chain)
-            squared_jumps = np.sum((chain[1:] - chain[:-1]) ** 2, axis=1)
-            return np.mean(squared_jumps)
+            if self.burn_in > 0 and len(chain) > self.burn_in + 1:
+                chain_post_burnin = chain[self.burn_in:]
+                squared_jumps = np.sum((chain_post_burnin[1:] - chain_post_burnin[:-1]) ** 2, axis=1)
+                return np.mean(squared_jumps)
+            elif self.burn_in == 0:
+                squared_jumps = np.sum((chain[1:] - chain[:-1]) ** 2, axis=1)
+                return np.mean(squared_jumps)
+            else:
+                return 0.0
     
     def pt_expected_squared_jump_distance(self):
         """Calculate the expected squared jump distance for parallel tempering."""

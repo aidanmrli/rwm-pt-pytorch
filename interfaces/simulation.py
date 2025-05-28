@@ -18,8 +18,10 @@ class MCMCSimulation:
                  symmetric: bool = True,
                  seed: Optional[int] = None,
                  beta_ladder: Optional[list] = None,
-                 swap_acceptance_rate: Optional[float] = None,):
+                 swap_acceptance_rate: Optional[float] = None,
+                 burn_in: int = 0):
         self.num_iterations = num_iterations
+        self.burn_in = max(0, min(burn_in, num_iterations - 1))  # Ensure valid burn-in
         self.target_dist = target_dist
         self.algorithm = algorithm(dim, 
                                    sigma, 
@@ -59,15 +61,24 @@ class MCMCSimulation:
 
     def expected_squared_jump_distance(self):
         """Calculate the expected squared jump distance for the 
-        Markov chain. 
+        Markov chain, excluding burn-in samples.
         Returns:
             float: The expected squared jump distance.
         """
         if not self.has_run():
             raise ValueError("The algorithm has not been run yet.")
         chain = np.array(self.algorithm.chain)
-        squared_jumps = np.sum((chain[1:] - chain[:-1]) ** 2, axis=1)
-        return np.mean(squared_jumps)
+        
+        # Apply burn-in if specified
+        if self.burn_in > 0 and len(chain) > self.burn_in + 1:
+            chain_post_burnin = chain[self.burn_in:]
+            squared_jumps = np.sum((chain_post_burnin[1:] - chain_post_burnin[:-1]) ** 2, axis=1)
+            return np.mean(squared_jumps)
+        elif self.burn_in == 0:
+            squared_jumps = np.sum((chain[1:] - chain[:-1]) ** 2, axis=1)
+            return np.mean(squared_jumps)
+        else:
+            return 0.0
     
     def pt_expected_squared_jump_distance(self):
         """Calculate the expected squared jump distance for parallel tempering.
