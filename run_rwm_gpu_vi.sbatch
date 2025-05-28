@@ -24,19 +24,15 @@ source /h/liaidan/random-walk-metropolis/venv/bin/activate
 # RoughCarpet, RoughCarpetScaled, 
 # ThreeMixture, ThreeMixtureScaled, 
 # IIDGamma, IIDBeta, Hypercube
-TARGET_DISTRIBUTION="Hypercube"
-echo "Starting RWM GPU study for $TARGET_DISTRIBUTION distribution"
-echo "Job ID: $SLURM_JOB_ID"
-echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
-echo "Seed: $SLURM_ARRAY_TASK_ID"
-echo "Node: $SLURMD_NODENAME"
-echo "GPU: $CUDA_VISIBLE_DEVICES"
+# NealFunnel, SuperFunnel
+
+TARGET_DISTRIBUTION="NealFunnel"
 
 # Run the experiment with default parameters but varying seed
 python experiment_RWM_GPU.py \
     --target $TARGET_DISTRIBUTION \
-    --dim 2 \
-    --num_iters 100000 \
+    --dim 10 \
+    --num_iters 5000 \
     --var_max 1.5 \
     --seed $SLURM_ARRAY_TASK_ID
 
