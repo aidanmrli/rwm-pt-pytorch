@@ -17,7 +17,7 @@ class ThreeMixtureDistribution(TargetDistribution):
         if scaling:
             self.name = "ThreeMixtureScaled"
         self.means = [np.zeros(self.dim), np.zeros(self.dim), np.zeros(self.dim)]
-        self.means[0][0], self.means[2][0] = -5, 5
+        self.means[0][0], self.means[2][0] = -15, 15
 
         ### Choose which covariance matrix to use!
         # self.covs = [np.eye(self.dim) / np.sqrt(self.dim), np.eye(self.dim) / np.sqrt(self.dim), np.eye(self.dim) / np.sqrt(self.dim)]
@@ -71,7 +71,7 @@ class RoughCarpetDistribution(TargetDistribution):
         self.name = "RoughCarpet"
         if scaling:
             self.name = "RoughCarpetScaled"
-        self.modes = [-5, 0, 5]
+        self.modes = [-15, 0, 15]
         self.weights = [0.5, 0.3, 0.2]
         if scaling:  # Randomly sample scaling factors, distribution must have expectation 1
             self.scaling_factors = np.random.uniform(0.000001, 2, self.dim)

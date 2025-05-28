@@ -1,8 +1,5 @@
 import argparse
 import os
-from algorithms import *
-import numpy as np
-from target_distributions import *
 import matplotlib.pyplot as plt
 import json
 
@@ -36,11 +33,12 @@ def create_plot(data, filename):
             marker='x')
 
     plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
+    # plt.axvline(x=0.135, color='purple', linestyle=':', label='a = 0.135')
     plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs acceptance rate (dim={dim})')
     plt.legend()
-    output_filename = f"images/publishing/ESJD_vs_acceptance_rate_{os.path.splitext(filename)[0]}.png"
+    output_filename = f"images/averaged/ESJD_vs_acceptance_rate_{os.path.splitext(filename)[0]}.png"
     plt.savefig(output_filename, dpi=300, bbox_inches='tight')
     plt.clf()
     plt.close()
@@ -49,7 +47,7 @@ def create_plot(data, filename):
 # Function to process all JSON files in a directory
 def process_directory(directory_path):
     for filename in os.listdir(directory_path):
-        if filename.endswith('.json'):
+        if filename.endswith('averaged.json'):
             file_path = os.path.join(directory_path, filename)
             try:
                 data = read_json(file_path)
@@ -60,6 +58,5 @@ def process_directory(directory_path):
 
 # Main execution
 if __name__ == "__main__":
-    # Replace 'data_directory' with the path to your directory containing JSON files
-    data_directory = 'data/data_directory'
+    data_directory = 'data/'
     process_directory(data_directory)
