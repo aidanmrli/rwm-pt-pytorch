@@ -14,6 +14,10 @@ def calculate_hybrid_rosenbrock_dim(n1, n2):
     """Calculate the dimension for HybridRosenbrock: 1 + n2 * (n1 - 1)"""
     return 1 + n2 * (n1 - 1)
 
+def calculate_super_funnel_dim(J, K):
+    """Calculate the dimension for SuperFunnel: J + J*K + 1 + K + 1 + 1"""
+    return J + J * K + 1 + K + 1 + 1
+
 def get_target_distribution(name, dim, use_torch=True, **kwargs):
     """Get target distribution with optional GPU acceleration."""
     if use_torch:
@@ -55,6 +59,40 @@ def get_target_distribution(name, dim, use_torch=True, **kwargs):
             device = kwargs.get('device', None)
             # For HybridRosenbrock, dim is calculated from n1 and n2
             return HybridRosenbrockTorch(n1=n1, n2=n2, a_coeff=a_coeff, b_coeff=b_coeff, mu=mu, device=device)
+        elif name == "NealFunnel":
+            mu_v = kwargs.get('mu_v', 0.0)
+            sigma_v_sq = kwargs.get('sigma_v_sq', 9.0)
+            mu_z = kwargs.get('mu_z', 0.0)
+            device = kwargs.get('device', None)
+            return NealFunnelTorch(dim, mu_v=mu_v, sigma_v_sq=sigma_v_sq, mu_z=mu_z, device=device)
+        elif name == "SuperFunnel":
+            # SuperFunnel requires synthetic data generation
+            J = kwargs.get('J', 5)  # Number of groups
+            K = kwargs.get('K', 3)  # Number of features
+            n_per_group = kwargs.get('n_per_group', 20)  # Observations per group
+            prior_hypermean_std = kwargs.get('prior_hypermean_std', 10.0)
+            prior_tau_scale = kwargs.get('prior_tau_scale', 2.5)
+            device = kwargs.get('device', None)
+            
+            # Generate synthetic data for SuperFunnel
+            torch.manual_seed(42)  # For reproducible synthetic data
+            X_data = []
+            Y_data = []
+            for j in range(J):
+                # Generate random design matrix for group j
+                X_j = torch.randn(n_per_group, K)
+                # Generate synthetic binary outcomes
+                # Use simple logistic model: logit(p) = 0.5 * sum(X_j, dim=1)
+                logits = 0.5 * torch.sum(X_j, dim=1)
+                probs = torch.sigmoid(logits)
+                Y_j = torch.bernoulli(probs)
+                X_data.append(X_j)
+                Y_data.append(Y_j)
+            
+            return SuperFunnelTorch(J, K, X_data, Y_data, 
+                                  prior_hypermean_std=prior_hypermean_std, 
+                                  prior_tau_scale=prior_tau_scale, 
+                                  device=device)
         else:
             raise ValueError("Unknown target distribution name")
     else:
@@ -75,143 +113,28 @@ def get_target_distribution(name, dim, use_torch=True, **kwargs):
             return IIDGamma(dim, shape=2, scale=3)
         elif name == "IIDBeta":
             return IIDBeta(dim, alpha=2, beta=3)
-        elif name in ["FullRosenbrock", "EvenRosenbrock", "HybridRosenbrock"]:
+        elif name in ["FullRosenbrock", "EvenRosenbrock", "HybridRosenbrock", "NealFunnel", "SuperFunnel"]:
             raise ValueError(f"{name} distribution only available with PyTorch (use_torch=True)")
         else:
             raise ValueError("Unknown target distribution name")
 
-def run_performance_comparison(dim, num_iters, target_name="MultivariateNormalTorch", seed=42, burn_in=1000, **kwargs):
-    """Compare GPU vs CPU performance for a single configuration."""
-    
-    # Handle HybridRosenbrock dimension calculation
-    if target_name == "HybridRosenbrock":
-        n1 = kwargs.get('n1', 3)
-        n2 = kwargs.get('n2', 5)
-        actual_dim = calculate_hybrid_rosenbrock_dim(n1, n2)
-        print(f"\n{'='*60}")
-        print(f"PERFORMANCE COMPARISON: {target_name} (n1={n1}, n2={n2}, actual_dim={actual_dim}, samples={num_iters}, burn_in={burn_in}, seed={seed})")
-        print(f"{'='*60}")
-    else:
-        actual_dim = dim
-        print(f"\n{'='*60}")
-        print(f"PERFORMANCE COMPARISON: {target_name} (dim={dim}, samples={num_iters}, burn_in={burn_in}, seed={seed})")
-        print(f"{'='*60}")
-    
-    # Test variance (roughly optimal for high dimensions)
-    variance = 2.38**2 / actual_dim
-    
-    # GPU version
-    print("\n🚀 Testing GPU-accelerated implementation...")
-    target_dist_gpu = get_target_distribution(target_name, dim, use_torch=True, **kwargs)
-    
-    gpu_start = time.time()
-    simulation_gpu = MCMCSimulation_GPU(
-        dim=actual_dim,
-        sigma=variance,
-        num_iterations=num_iters,
-        algorithm=RandomWalkMH_GPU_Optimized,
-        target_dist=target_dist_gpu,
-        symmetric=True,
-        pre_allocate=True,
-        seed=seed,
-        burn_in=burn_in
-    )
-    
-    chain_gpu = simulation_gpu.generate_samples(progress_bar=False)
-    gpu_time = time.time() - gpu_start
-    gpu_acceptance = simulation_gpu.acceptance_rate()
-    gpu_esjd = simulation_gpu.expected_squared_jump_distance()
-    
-    print(f"✅ GPU Results:")
-    print(f"   Time: {gpu_time:.2f} seconds")
-    print(f"   Samples/sec: {num_iters/gpu_time:.0f}")
-    print(f"   Acceptance rate: {gpu_acceptance:.3f}")
-    print(f"   ESJD: {gpu_esjd:.6f}")
-    
-    # CPU version for comparison (using original implementation)
-    print("\n🐌 Testing CPU implementation...")
-    from algorithms import RandomWalkMH
-    from interfaces import MCMCSimulation
-    
-    # Skip CPU comparison for Rosenbrock distributions (PyTorch only)
-    if target_name in ["FullRosenbrock", "EvenRosenbrock", "HybridRosenbrock"]:
-        print("   ⚠️  Skipping CPU comparison - Rosenbrock distributions only available with PyTorch")
-        return {
-            'gpu_time': gpu_time,
-            'cpu_time': None,
-            'speedup': None,
-            'gpu_acceptance': gpu_acceptance,
-            'cpu_acceptance': None,
-            'gpu_esjd': gpu_esjd,
-            'cpu_esjd': None,
-            'seed': seed
-        }
-    
-    target_dist_cpu = get_target_distribution(target_name, dim, use_torch=False)
-    
-    cpu_start = time.time()
-    simulation_cpu = MCMCSimulation(
-        dim=actual_dim,
-        sigma=variance,
-        num_iterations=num_iters,
-        algorithm=RandomWalkMH,
-        target_dist=target_dist_cpu,
-        symmetric=True,
-        seed=seed,
-        burn_in=burn_in
-    )
-    
-    chain_cpu = simulation_cpu.generate_samples()
-    cpu_time = time.time() - cpu_start
-    cpu_acceptance = simulation_cpu.acceptance_rate()
-    cpu_esjd = simulation_cpu.expected_squared_jump_distance()
-    
-    print(f"✅ CPU Results:")
-    print(f"   Time: {cpu_time:.2f} seconds")
-    print(f"   Samples/sec: {num_iters/cpu_time:.0f}")
-    print(f"   Acceptance rate: {cpu_acceptance:.3f}")
-    print(f"   ESJD: {cpu_esjd:.6f}")
-    
-    # Calculate speedup
-    speedup = cpu_time / gpu_time
-    print(f"\n🎯 Performance Summary:")
-    print(f"   Speedup: {speedup:.1f}x faster")
-    print(f"   GPU efficiency: {speedup:.1f}x improvement")
-    
-    # Verify results are similar
-    acc_diff = abs(gpu_acceptance - cpu_acceptance)
-    esjd_diff = abs(gpu_esjd - cpu_esjd) / max(gpu_esjd, cpu_esjd)
-    
-    print(f"\n🔍 Accuracy Verification:")
-    print(f"   Acceptance rate difference: {acc_diff:.4f}")
-    print(f"   ESJD relative difference: {esjd_diff:.4f}")
-    
-    if acc_diff < 0.05 and esjd_diff < 0.1:
-        print("   ✅ Results are consistent between GPU and CPU")
-    else:
-        print("   ⚠️  Large differences detected - check implementation")
-    
-    return {
-        'gpu_time': gpu_time,
-        'cpu_time': cpu_time,
-        'speedup': speedup,
-        'gpu_acceptance': gpu_acceptance,
-        'cpu_acceptance': cpu_acceptance,
-        'gpu_esjd': gpu_esjd,
-        'cpu_esjd': cpu_esjd,
-        'seed': seed
-    }
-
 def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, seed=42, burn_in=1000, **kwargs):
     """Run many simulations with different variance values, then save and plot the progression of ESJD and acceptance rate."""
     
-    # Handle HybridRosenbrock dimension calculation
+    # Handle special dimension calculations
     if target_name == "HybridRosenbrock":
         n1 = kwargs.get('n1', 3)
         n2 = kwargs.get('n2', 5)
         actual_dim = calculate_hybrid_rosenbrock_dim(n1, n2)
         print(f"\n{'='*60}")
         print(f"Target: {target_name}, n1={n1}, n2={n2}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
+        print(f"{'='*60}")
+    elif target_name == "SuperFunnel":
+        J = kwargs.get('J', 5)
+        K = kwargs.get('K', 3)
+        actual_dim = calculate_super_funnel_dim(J, K)
+        print(f"\n{'='*60}")
+        print(f"Target: {target_name}, J={J}, K={K}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     else:
         actual_dim = dim
@@ -479,6 +402,18 @@ if __name__ == "__main__":
     parser.add_argument("--hybrid_rosenbrock_n1", type=int, default=3, help="Block length parameter for HybridRosenbrock")
     parser.add_argument("--hybrid_rosenbrock_n2", type=int, default=5, help="Number of blocks/rows for HybridRosenbrock")
     
+    # NealFunnel parameters
+    parser.add_argument("--neal_funnel_mu_v", type=float, default=0.0, help="Mean of v variable for NealFunnel")
+    parser.add_argument("--neal_funnel_sigma_v_sq", type=float, default=9.0, help="Variance of v variable for NealFunnel")
+    parser.add_argument("--neal_funnel_mu_z", type=float, default=0.0, help="Mean of z variables for NealFunnel")
+    
+    # SuperFunnel parameters
+    parser.add_argument("--super_funnel_J", type=int, default=5, help="Number of groups for SuperFunnel")
+    parser.add_argument("--super_funnel_K", type=int, default=3, help="Number of features for SuperFunnel")
+    parser.add_argument("--super_funnel_n_per_group", type=int, default=20, help="Observations per group for SuperFunnel")
+    parser.add_argument("--super_funnel_prior_hypermean_std", type=float, default=10.0, help="Prior hypermean std for SuperFunnel")
+    parser.add_argument("--super_funnel_prior_tau_scale", type=float, default=2.5, help="Prior tau scale for SuperFunnel")
+    
     args = parser.parse_args()
     
     if torch.cuda.is_available():
@@ -492,6 +427,16 @@ if __name__ == "__main__":
     if args.target == "HybridRosenbrock":
         kwargs['n1'] = args.hybrid_rosenbrock_n1
         kwargs['n2'] = args.hybrid_rosenbrock_n2
+    elif args.target == "NealFunnel":
+        kwargs['mu_v'] = args.neal_funnel_mu_v
+        kwargs['sigma_v_sq'] = args.neal_funnel_sigma_v_sq
+        kwargs['mu_z'] = args.neal_funnel_mu_z
+    elif args.target == "SuperFunnel":
+        kwargs['J'] = args.super_funnel_J
+        kwargs['K'] = args.super_funnel_K
+        kwargs['n_per_group'] = args.super_funnel_n_per_group
+        kwargs['prior_hypermean_std'] = args.super_funnel_prior_hypermean_std
+        kwargs['prior_tau_scale'] = args.super_funnel_prior_tau_scale
     
     if args.mode == "default":
         # Parameter optimization study
