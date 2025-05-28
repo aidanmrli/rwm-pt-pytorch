@@ -41,6 +41,10 @@ class NealFunnelTorch(TorchTargetDistribution):
         Compute the log density of Neal's Funnel.
         x_tensor: (batch_size, D) or (D,)
         """
+        # Handle device mismatch by moving input to the correct device
+        if x_tensor.device != self.device:
+            x_tensor = x_tensor.to(self.device)
+            
         if x_tensor.ndim == 1:
             x_tensor_internal = x_tensor.unsqueeze(0)
         else:
@@ -187,6 +191,10 @@ class SuperFunnelTorch(TorchTargetDistribution):
         return alphas, betas, mu_alpha, mu_beta, tau_alpha, tau_beta
 
     def log_density(self, Theta_tensor):
+        # Handle device mismatch by moving input to the correct device
+        if Theta_tensor.device != self.device:
+            Theta_tensor = Theta_tensor.to(self.device)
+            
         if Theta_tensor.ndim == 1:
             Theta_tensor_internal = Theta_tensor.unsqueeze(0)
         else:
@@ -286,7 +294,7 @@ class SuperFunnelTorch(TorchTargetDistribution):
         return torch.exp(self.log_density(x))
 
     def get_name(self):
-        return f"HierarchicalLogisticSuperFunnelTorch_J{self.J}_K{self.K}"
+        return f"SuperFunnelTorch_J{self.J}_K{self.K}"
 
     def draw_sample(self, beta=1.0):
         """
