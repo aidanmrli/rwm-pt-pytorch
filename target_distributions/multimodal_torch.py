@@ -1,14 +1,13 @@
 import torch
-import numpy as np
 from interfaces.target_torch import TorchTargetDistribution
 
 class ThreeMixtureDistributionTorch(TorchTargetDistribution):
     """
     PyTorch-native three-component mixture distribution with full GPU acceleration.
-    Three modes at (-15, 0, ..., 0), (0, 0, ..., 0), and (15, 0, ..., 0).
+    Customizable mode centers and weights for flexible multimodal distributions.
     """
 
-    def __init__(self, dim, scaling=False, device=None):
+    def __init__(self, dim, scaling=False, device=None, mode_centers=None, mode_weights=None):
         """
         Initialize the PyTorch-native ThreeMixtureDistribution.
 
@@ -16,27 +15,40 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
             dim: Dimension of the distribution
             scaling: Whether to apply random scaling factors to coordinates
             device: PyTorch device for GPU acceleration
+            mode_centers: List/array of 3 mode centers, each of length dim.
+                         Default: [[-15, 0, ..., 0], [0, 0, ..., 0], [15, 0, ..., 0]]
+            mode_weights: List/array of 3 mixing weights that sum to 1.
+                         Default: [1/3, 1/3, 1/3]
         """
         super().__init__(dim, device)
-        self.name = "ThreeMixtureTorch"
-        if scaling:
-            self.name = "ThreeMixtureScaledTorch"
         
-        # Initialize means: (-15, 0, ..., 0), (0, 0, ..., 0), (15, 0, ..., 0)
-        self.means = torch.zeros(3, dim, device=self.device, dtype=torch.float32)
-        self.means[0, 0] = -15.0
-        self.means[2, 0] = 15.0
+        # Set default mode centers if not provided
+        if mode_centers is None:
+            mode_centers = [
+                [-5.0] + [0.0] * (dim - 1),  # (-5, 0, ..., 0)
+                [0.0] * dim,                   # (0, 0, ..., 0)
+                [5.0] + [0.0] * (dim - 1)     # (5, 0, ..., 0)
+            ]
+        
+        # Set default mode weights if not provided
+        if mode_weights is None:
+            mode_weights = [1/3, 1/3, 1/3]
+        
+        # Validate inputs
+        self._validate_mode_parameters(mode_centers, mode_weights, dim)
+        
+        # Generate name based on parameters
+        self.name = self._generate_name(scaling, mode_centers, mode_weights)
+        
+        # Initialize means from mode_centers
+        self.means = torch.tensor(mode_centers, device=self.device, dtype=torch.float32)
         
         # Initialize covariance matrices (identity matrices)
         self.covs = torch.eye(dim, device=self.device, dtype=torch.float32).unsqueeze(0).repeat(3, 1, 1)
         
         if scaling:
-            # Apply random scaling factors
-            scaling_factors = torch.tensor(
-                np.random.uniform(0.000001, 2, dim), 
-                device=self.device, 
-                dtype=torch.float32
-            )
+            # Apply random scaling factors uniformly from [0.02, 1.98] with expectation 1.0
+            scaling_factors = torch.rand(dim, device=self.device, dtype=torch.float32) * (1.98 - 0.02) + 0.02
             self.scaling_factors = scaling_factors
             # Apply scaling to covariance matrices
             for i in range(3):
@@ -50,9 +62,59 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
         log_2pi = torch.log(torch.tensor(2.0 * torch.pi, device=self.device, dtype=torch.float32))
         self.log_norm_consts = -0.5 * (dim * log_2pi + torch.log(self.cov_dets))
         
-        # Mixing weights (equal: 1/3 each)
-        self.mixing_weights = torch.tensor([1/3, 1/3, 1/3], device=self.device, dtype=torch.float32)
+        # Initialize mixing weights
+        self.mixing_weights = torch.tensor(mode_weights, device=self.device, dtype=torch.float32)
         self.log_mixing_weights = torch.log(self.mixing_weights)
+
+    def _validate_mode_parameters(self, mode_centers, mode_weights, dim):
+        """Validate mode centers and weights parameters."""
+        # Validate mode_centers
+        if len(mode_centers) != 3:
+            raise ValueError(f"mode_centers must contain exactly 3 modes, got {len(mode_centers)}")
+        
+        for i, center in enumerate(mode_centers):
+            if len(center) != dim:
+                raise ValueError(f"Mode {i} has dimension {len(center)}, expected {dim}")
+        
+        # Validate mode_weights
+        if len(mode_weights) != 3:
+            raise ValueError(f"mode_weights must contain exactly 3 weights, got {len(mode_weights)}")
+        
+        weights_tensor = torch.tensor(mode_weights, dtype=torch.float32)
+        if not torch.all(weights_tensor > 0):
+            raise ValueError("All mode_weights must be positive")
+        
+        if not torch.allclose(torch.sum(weights_tensor), torch.tensor(1.0), rtol=1e-6):
+            raise ValueError(f"mode_weights must sum to 1.0, got sum = {torch.sum(weights_tensor).item()}")
+
+    def _generate_name(self, scaling, mode_centers, mode_weights):
+        """Generate a descriptive name based on parameters."""
+        base_name = "ThreeMixtureTorch"
+        
+        # Check if using default parameters
+        default_centers = [
+            [-5.0] + [0.0] * (self.dim - 1),
+            [0.0] * self.dim,
+            [5.0] + [0.0] * (self.dim - 1)
+        ]
+        default_weights = [1/3, 1/3, 1/3]
+        
+        # Convert to tensors for comparison
+        mode_centers_tensor = torch.tensor(mode_centers, dtype=torch.float32)
+        default_centers_tensor = torch.tensor(default_centers, dtype=torch.float32)
+        mode_weights_tensor = torch.tensor(mode_weights, dtype=torch.float32)
+        default_weights_tensor = torch.tensor(default_weights, dtype=torch.float32)
+        
+        is_default_centers = torch.allclose(mode_centers_tensor, default_centers_tensor, rtol=1e-6)
+        is_default_weights = torch.allclose(mode_weights_tensor, default_weights_tensor, rtol=1e-6)
+        
+        if not (is_default_centers and is_default_weights):
+            base_name += "Custom"
+        
+        if scaling:
+            base_name += "Scaled"
+        
+        return base_name
 
     def get_name(self):
         """Return the name of the target distribution as a string."""
@@ -114,15 +176,19 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
 
     def draw_sample(self, beta=1.0):
         """Draw a sample from the distribution (CPU implementation for compatibility)."""
-        # Convert to numpy for compatibility with existing code
-        means_np = self.means.cpu().numpy()
-        covs_np = self.covs.cpu().numpy()
-        
-        # Pick a mode at random and sample from it
-        random_integer = np.random.randint(0, 3)
-        target_mean, target_cov = means_np[random_integer], covs_np[random_integer]
-        
-        return np.random.multivariate_normal(target_mean, target_cov / beta)
+        # Use PyTorch for sampling but return numpy for compatibility
+        with torch.no_grad():
+            # Pick a mode at random and sample from it
+            random_integer = torch.randint(0, 3, (1,), device=self.device).item()
+            target_mean, target_cov = self.means[random_integer], self.covs[random_integer]
+            
+            # Generate sample using PyTorch multivariate normal
+            cov_scaled = target_cov / beta
+            chol = torch.linalg.cholesky(cov_scaled)
+            standard_sample = torch.randn(self.dim, device=self.device, dtype=torch.float32)
+            sample = target_mean + torch.matmul(chol, standard_sample)
+            
+            return sample.cpu().numpy()
     
     def draw_samples_torch(self, n_samples, beta=1.0):
         """
@@ -175,10 +241,10 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
 class RoughCarpetDistributionTorch(TorchTargetDistribution):
     """
     PyTorch-native rough carpet distribution with full GPU acceleration.
-    Product of 1D three-mode distributions with modes at -15, 0, 15.
+    Product of 1D three-mode distributions with customizable mode centers and weights.
     """
 
-    def __init__(self, dim, scaling=False, device=None):
+    def __init__(self, dim, scaling=False, device=None, mode_centers=None, mode_weights=None):
         """
         Initialize the PyTorch-native RoughCarpetDistribution.
 
@@ -186,28 +252,86 @@ class RoughCarpetDistributionTorch(TorchTargetDistribution):
             dim: Dimension of the distribution
             scaling: Whether to apply random scaling factors to coordinates
             device: PyTorch device for GPU acceleration
+            mode_centers: List/array of 3 scalar mode centers for 1D components.
+                         Default: [-15.0, 0.0, 15.0]
+            mode_weights: List/array of 3 mixing weights that sum to 1.
+                         Default: [0.5, 0.3, 0.2]
         """
         super().__init__(dim, device)
-        self.name = "RoughCarpetTorch"
-        if scaling:
-            self.name = "RoughCarpetScaledTorch"
+        
+        # Set default mode centers if not provided
+        if mode_centers is None:
+            mode_centers = [-5.0, 0.0, 5.0]
+        
+        # Set default mode weights if not provided
+        if mode_weights is None:
+            mode_weights = [0.5, 0.3, 0.2]
+        
+        # Validate inputs
+        self._validate_mode_parameters(mode_centers, mode_weights)
+        
+        # Generate name based on parameters
+        self.name = self._generate_name(scaling, mode_centers, mode_weights)
         
         # Modes and weights for 1D components
-        self.modes = torch.tensor([-15.0, 0.0, 15.0], device=self.device, dtype=torch.float32)
-        self.weights = torch.tensor([0.5, 0.3, 0.2], device=self.device, dtype=torch.float32)
+        self.modes = torch.tensor(mode_centers, device=self.device, dtype=torch.float32)
+        self.weights = torch.tensor(mode_weights, device=self.device, dtype=torch.float32)
         self.log_weights = torch.log(self.weights)
         
         # Pre-compute normalization constant for 1D Gaussian
         self.log_sqrt_2pi = torch.log(torch.sqrt(torch.tensor(2.0 * torch.pi, device=self.device, dtype=torch.float32)))
         
         if scaling:
-            # Apply random scaling factors
-            scaling_factors = torch.tensor(
-                np.random.uniform(0.000001, 2, dim), 
-                device=self.device, 
-                dtype=torch.float32
-            )
+            # Apply random scaling factors uniformly from [0.02, 1.98] with expectation 1.0
+            scaling_factors = torch.rand(dim, device=self.device, dtype=torch.float32) * (1.98 - 0.02) + 0.02
             self.scaling_factors = scaling_factors
+
+    def _validate_mode_parameters(self, mode_centers, mode_weights):
+        """Validate mode centers and weights parameters."""
+        # Validate mode_centers
+        if len(mode_centers) != 3:
+            raise ValueError(f"mode_centers must contain exactly 3 modes, got {len(mode_centers)}")
+        
+        # Check that mode_centers are scalars (not arrays)
+        for i, center in enumerate(mode_centers):
+            if not isinstance(center, (int, float)):
+                raise ValueError(f"Mode center {i} must be a scalar, got {type(center)}")
+        
+        # Validate mode_weights
+        if len(mode_weights) != 3:
+            raise ValueError(f"mode_weights must contain exactly 3 weights, got {len(mode_weights)}")
+        
+        weights_tensor = torch.tensor(mode_weights, dtype=torch.float32)
+        if not torch.all(weights_tensor > 0):
+            raise ValueError("All mode_weights must be positive")
+        
+        if not torch.allclose(torch.sum(weights_tensor), torch.tensor(1.0), rtol=1e-6):
+            raise ValueError(f"mode_weights must sum to 1.0, got sum = {torch.sum(weights_tensor).item()}")
+
+    def _generate_name(self, scaling, mode_centers, mode_weights):
+        """Generate a descriptive name based on parameters."""
+        base_name = "RoughCarpetTorch"
+        
+        # Check if using default parameters
+        default_centers = [-15.0, 0.0, 15.0]
+        default_weights = [0.5, 0.3, 0.2]
+        
+        # Convert to tensors for comparison
+        mode_centers_tensor = torch.tensor(mode_centers, dtype=torch.float32)
+        default_centers_tensor = torch.tensor(default_centers, dtype=torch.float32)
+        mode_weights_tensor = torch.tensor(mode_weights, dtype=torch.float32)
+        default_weights_tensor = torch.tensor(default_weights, dtype=torch.float32)
+        
+        is_default_centers = torch.allclose(mode_centers_tensor, default_centers_tensor, rtol=1e-6)
+        is_default_weights = torch.allclose(mode_weights_tensor, default_weights_tensor, rtol=1e-6)
+        
+        if not (is_default_centers and is_default_weights):
+            base_name += "Custom"
+        
+        if scaling:
+            base_name += "Scaled"
+        
+        return base_name
 
     def get_name(self):
         """Return the name of the target distribution as a string."""
@@ -298,15 +422,20 @@ class RoughCarpetDistributionTorch(TorchTargetDistribution):
 
     def draw_sample(self, beta=1.0):
         """Draw a sample from the distribution (CPU implementation for compatibility)."""
-        sample = np.zeros(self.dim)
-        modes_np = self.modes.cpu().numpy()
-        weights_np = self.weights.cpu().numpy()
-        
-        for i in range(self.dim):
-            mean_value = np.random.choice(modes_np, p=weights_np)
-            sample[i] = np.random.normal(mean_value, 1.0 / np.sqrt(beta))
-        
-        return sample
+        # Use PyTorch for sampling but return numpy for compatibility
+        with torch.no_grad():
+            sample = torch.zeros(self.dim, device=self.device, dtype=torch.float32)
+            
+            for i in range(self.dim):
+                # Sample mode index for this coordinate
+                mode_idx = torch.multinomial(self.weights, 1, replacement=True).item()
+                mean_value = self.modes[mode_idx]
+                
+                # Sample from normal distribution
+                noise = torch.randn(1, device=self.device, dtype=torch.float32) / torch.sqrt(torch.tensor(beta, device=self.device))
+                sample[i] = mean_value + noise.item()
+            
+            return sample.cpu().numpy()
     
     def draw_samples_torch(self, n_samples, beta=1.0):
         """

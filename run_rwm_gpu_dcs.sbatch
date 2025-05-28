@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
 #SBATCH --gres=gpu:1
-#SBATCH --nodelist=quartet[1-3,5],dgx1,sonata2
+#SBATCH --nodelist=concerto[1-3],overture,quartet[1-3,5],dgx1,sonata2
 #SBATCH --array=1-30
 #SBATCH --output=logs/rwm_%j.out
 #SBATCH --error=logs/rwm_%j.err
@@ -30,13 +30,13 @@ mkdir -p logs
 # ThreeMixture, ThreeMixtureScaled, 
 # IIDGamma, IIDBeta, Hypercube
 # FullRosenbrock, EvenRosenbrock, HybridRosenbrock
-TARGET_DISTRIBUTION="HybridRosenbrock"
+TARGET_DISTRIBUTION="ThreeMixtureScaled"
 
 python experiment_RWM_GPU.py \
     --target $TARGET_DISTRIBUTION \
-    --dim 20 \
-    --num_iters 100000 \
-    --var_max 1.0 \
+    --dim 50 \
+    --num_iters 300000 \
+    --var_max 3.5 \
     --hybrid_rosenbrock_n1 3 \
     --hybrid_rosenbrock_n2 2 \
     --seed $SLURM_ARRAY_TASK_ID
