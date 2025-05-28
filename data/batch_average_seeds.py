@@ -177,7 +177,7 @@ Examples:
         """
     )
     
-    parser.add_argument('--data_dir', type=str, default='/h/319/aidanl/random-walk-metropolis/data',
+    parser.add_argument('--data_dir', type=str, default='./data',
                        help='Directory containing data files')
     parser.add_argument('--output_dir', type=str, default=None,
                        help='Output directory (default: same as data_dir)')
