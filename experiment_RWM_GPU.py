@@ -218,7 +218,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         print(f"{'='*60}")
     
     target_distribution = get_target_distribution(target_name, dim, use_torch=True, **kwargs)
-    var_value_range = np.linspace(0.01, var_max, 40)
+    var_value_range = np.linspace(0.01, var_max, 2)
     
     acceptance_rates = []
     expected_squared_jump_distances = []
@@ -348,6 +348,118 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     plt.clf()
     plt.close()
     print(f"   Traceplot created and saved as '{output_filename}'")
+    
+    # Create 2D density visualization with MCMC trajectory overlay
+    if actual_dim >= 2:
+        print(f"Creating 2D density visualization with MCMC trajectory...")
+        
+        plt.figure(figsize=(10, 8))
+        
+        # Extract first two dimensions of the chain
+        x_chain = chain_data[:, 0]
+        y_chain = chain_data[:, 1]
+        
+        # Determine plot bounds based on chain data with some padding
+        x_min, x_max = np.min(x_chain), np.max(x_chain)
+        y_min, y_max = np.min(y_chain), np.max(y_chain)
+        x_range = x_max - x_min
+        y_range = y_max - y_min
+        padding = 0.3  # 30% padding
+        
+        x_plot_min = x_min - padding * x_range
+        x_plot_max = x_max + padding * x_range
+        y_plot_min = y_min - padding * y_range
+        y_plot_max = y_max + padding * y_range
+        
+        # Create grid for density evaluation
+        x_grid = np.linspace(x_plot_min, x_plot_max, 100)
+        y_grid = np.linspace(y_plot_min, y_plot_max, 100)
+        X, Y = np.meshgrid(x_grid, y_grid)
+        
+        # Evaluate target density on the grid
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                # Create a point with the first two dimensions from the grid
+                # and remaining dimensions set to zero (or mean values)
+                point = np.zeros(actual_dim)
+                point[0] = X[i, j]
+                point[1] = Y[i, j]
+                
+                # For higher dimensions, use the mean of the chain for other dimensions
+                if actual_dim > 2:
+                    point[2:] = np.mean(chain_data[:, 2:], axis=0)
+                
+                # Evaluate density - handle both PyTorch and numpy distributions
+                try:
+                    if hasattr(target_distribution, 'density'):
+                        # Check if it's a PyTorch distribution that needs tensor input
+                        if hasattr(target_distribution, 'device') or isinstance(target_distribution, torch.nn.Module):
+                            point_tensor = torch.tensor(point, dtype=torch.float32, 
+                                                      device=getattr(target_distribution, 'device', 'cpu'))
+                            density_val = target_distribution.density(point_tensor)
+                            Z[i, j] = density_val.item() if torch.is_tensor(density_val) else density_val
+                        else:
+                            # CPU/numpy distribution
+                            Z[i, j] = target_distribution.density(point)
+                    elif hasattr(target_distribution, 'log_density'):
+                        # Convert log density to density
+                        if hasattr(target_distribution, 'device') or isinstance(target_distribution, torch.nn.Module):
+                            point_tensor = torch.tensor(point, dtype=torch.float32, 
+                                                      device=getattr(target_distribution, 'device', 'cpu'))
+                            log_dens = target_distribution.log_density(point_tensor)
+                            Z[i, j] = torch.exp(log_dens).item()
+                        else:
+                            Z[i, j] = np.exp(target_distribution.log_density(point))
+                    else:
+                        # Fallback: assume uniform density
+                        Z[i, j] = 1.0
+                except Exception as e:
+                    # If density evaluation fails, set to small positive value
+                    Z[i, j] = 1e-10
+        
+        # Create contour plot of target density
+        contour = plt.contourf(X, Y, Z, levels=20, cmap='viridis', alpha=0.7)
+        plt.colorbar(contour, label='Target Density')
+        
+        # Add contour lines for better visualization
+        plt.contour(X, Y, Z, levels=10, colors='white', alpha=0.3, linewidths=0.5)
+        
+        # Plot MCMC trajectory
+        # Use a subset of points for better visualization if chain is very long
+        max_points = 2000
+        if len(x_chain) > max_points:
+            indices = np.linspace(0, len(x_chain)-1, max_points, dtype=int)
+            x_traj = x_chain[indices]
+            y_traj = y_chain[indices]
+        else:
+            x_traj = x_chain
+            y_traj = y_chain
+        
+        # Plot trajectory as line with dots
+        plt.plot(x_traj, y_traj, 'r-', alpha=0.6, linewidth=0.8, label='MCMC Trajectory')
+        plt.scatter(x_traj[::max(1, len(x_traj)//100)], y_traj[::max(1, len(y_traj)//100)], 
+                   c='red', s=8, alpha=0.8, zorder=5)
+        
+        # Highlight start and end points
+        plt.scatter(x_traj[0], y_traj[0], c='lime', s=50, marker='o', 
+                   label='Start', zorder=6, edgecolors='black', linewidth=1)
+        plt.scatter(x_traj[-1], y_traj[-1], c='orange', s=50, marker='s', 
+                   label='End', zorder=6, edgecolors='black', linewidth=1)
+        
+        plt.xlabel('Dimension 1')
+        plt.ylabel('Dimension 2')
+        plt.title(f'2D Target Density with MCMC Trajectory - {target_name}\n'
+                 f'Optimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Save 2D visualization
+        density_filename = f"images/density2D_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
+        plt.savefig(density_filename, dpi=300, bbox_inches='tight')
+        plt.clf()
+        plt.close()
+        print(f"   2D density visualization created and saved as '{density_filename}'")
 
     return data
 
