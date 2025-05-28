@@ -220,7 +220,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         print(f"{'='*60}")
     
     target_distribution = get_target_distribution(target_name, dim, use_torch=True, **kwargs)
-    var_value_range = np.linspace(0.01, var_max, 2)
+    var_value_range = np.linspace(0.01, var_max, 40)
     
     acceptance_rates = []
     expected_squared_jump_distances = []
