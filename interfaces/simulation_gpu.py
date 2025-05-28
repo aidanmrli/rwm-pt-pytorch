@@ -113,11 +113,11 @@ class MCMCSimulation_GPU:
         
         if progress_bar:
             with tqdm.tqdm(total=self.num_iterations, desc="Running MCMC", unit="iteration") as pbar:
-                for i in range(self.num_iterations):
+                for i in range(self.num_iterations + self.burn_in):
                     self.algorithm.step()
                     pbar.update(1)
         else:
-            for i in range(self.num_iterations):
+            for i in range(self.num_iterations + self.burn_in):
                 self.algorithm.step()
                 
         chain = self.algorithm.chain
