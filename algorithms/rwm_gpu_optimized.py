@@ -221,6 +221,8 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
             )
             self.log_target_density_current = self._compute_log_density_optimized(self.current_state)
             
+            # Only add initial state to chain if it hasn't been added yet
+            # (this prevents double-adding when called from generate_samples)
             if self.pre_allocated_chain is not None and self.chain_index == 0:
                 self.pre_allocated_chain[self.chain_index] = self.current_state
                 self.pre_allocated_log_densities[self.chain_index] = self.log_target_density_current
@@ -353,6 +355,9 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
         total_steps = self.burn_in + num_samples
         self._precompute_all_randoms(total_steps)
         
+        # Track if we need to add initial state to avoid double-counting
+        initial_state_added = False
+        
         # Initialize if needed
         if self.current_state is None:
             self.current_state = torch.tensor(
@@ -364,6 +369,7 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
                 self.pre_allocated_chain[self.chain_index] = self.current_state
                 self.pre_allocated_log_densities[self.chain_index] = self.log_target_density_current
                 self.chain_index += 1
+                initial_state_added = True
         
         # Use CUDA events for precise timing
         if self.device.type == 'cuda':
@@ -396,7 +402,19 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
             print(f"GPU kernel time: {gpu_time:.3f}s ({total_steps/gpu_time:.1f} samples/sec)")
         
         # Return only post-burn-in samples
-        return self.get_chain_gpu()[self.burn_in:]
+        full_chain = self.get_chain_gpu()
+        
+        # Calculate burn-in offset consistently for both paths
+        if self.pre_allocated_chain is not None:
+            # Pre-allocation path: [initial_state] + [burn_in samples] + [num_samples samples]
+            # Skip initial_state + burn_in to get just [num_samples samples]
+            burn_in_offset = 1 + self.burn_in  # +1 for initial state we added
+        else:
+            # Non-pre-allocation path: [inherited_initial] + [burn_in samples] + [num_samples samples]  
+            # Skip inherited_initial + burn_in to get just [num_samples samples]
+            burn_in_offset = 1 + self.burn_in  # +1 for inherited initial state
+            
+        return full_chain[burn_in_offset:]
     
     def _precompute_all_randoms(self, total_steps):
         """Pre-compute all random numbers for optimal GPU memory usage."""
