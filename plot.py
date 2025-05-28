@@ -1,8 +1,5 @@
 import argparse
 import os
-from algorithms import *
-import numpy as np
-from target_distributions import *
 import matplotlib.pyplot as plt
 import json
 
