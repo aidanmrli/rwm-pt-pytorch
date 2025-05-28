@@ -16,6 +16,8 @@ from algorithms.rwm_gpu import RandomWalkMH_GPU
 from algorithms.rwm import RandomWalkMH
 from algorithms.rwm_gpu_optimized import RandomWalkMH_GPU_Optimized, ultra_fused_mcmc_step_basic
 from target_distributions import MultivariateNormal, MultivariateNormalTorch
+# Import new funnel distributions
+from target_distributions import NealFunnelTorch, SuperFunnelTorch
 import matplotlib.pyplot as plt
 
 def test_standard_rwm_correctness():
@@ -613,6 +615,358 @@ def test_device_fallback():
         print(f"   ❌ All implementations failed")
         return False
 
+def test_funnel_distributions():
+    """Test new funnel distributions (NealFunnelTorch and SuperFunnelTorch) with RWM."""
+    print("\n🌪️ Testing Funnel Distributions...")
+    
+    try:
+        # Test 1: Neal's Funnel Distribution
+        print("   🔍 Test 1: Neal's Funnel Distribution...")
+        
+        dim = 5
+        num_samples = 2000
+        burn_in = 500
+        
+        neal_funnel = NealFunnelTorch(dimension=dim)
+        print(f"      Created {neal_funnel.get_name()}")
+        
+        # Use smaller proposal variance for funnel (challenging geometry)
+        variance = 0.2
+        
+        rwm_funnel = RandomWalkMH_GPU(
+            dim=dim,
+            var=variance,
+            target_dist=neal_funnel,
+            standard_rwm=True,
+            symmetric=True,
+            pre_allocate_steps=num_samples,
+            device='cuda' if torch.cuda.is_available() else 'cpu'
+        )
+        
+        # Generate samples
+        torch.manual_seed(789)
+        chain = rwm_funnel.generate_samples(num_samples)
+        
+        # Basic checks
+        assert len(chain) == num_samples, f"Expected {num_samples} samples, got {len(chain)}"
+        
+        # Post burn-in analysis
+        post_burnin_chain = chain[burn_in:]
+        assert len(post_burnin_chain) == num_samples - burn_in, f"Post burn-in should have {num_samples - burn_in} samples, got {len(post_burnin_chain)}"
+        
+        # Check v variable (first dimension) statistics
+        v_samples = post_burnin_chain[:, 0]
+        v_mean = torch.mean(v_samples)
+        v_std = torch.std(v_samples)
+        
+        print(f"      Samples generated: {len(chain)}")
+        print(f"      Post burn-in samples: {len(post_burnin_chain)}")
+        print(f"      Acceptance rate: {rwm_funnel.acceptance_rate:.3f}")
+        print(f"      V variable mean: {v_mean:.3f} (expected ~0)")
+        print(f"      V variable std: {v_std:.3f} (expected ~3)")
+        
+        # Reasonable bounds for funnel (v should be roughly N(0,3))
+        funnel_test1_pass = (
+            0.1 < rwm_funnel.acceptance_rate < 0.8 and  # Reasonable acceptance rate
+            abs(v_mean) < 1.0 and  # V mean near 0
+            1.5 < v_std < 5.0  # V std around 3
+        )
+        
+        if funnel_test1_pass:
+            print("   ✅ Neal's Funnel test passed")
+        else:
+            print("   ⚠️  Neal's Funnel test results seem unusual")
+        
+        # Test 2: Super Funnel Distribution (Hierarchical Logistic Regression)
+        print("   🔍 Test 2: Super Funnel Distribution...")
+        
+        # Create synthetic logistic regression data
+        J, K = 3, 2  # 3 groups, 2 covariates
+        n_j = [20, 15, 25]  # Sample sizes per group
+        
+        # Generate synthetic X and Y data
+        torch.manual_seed(456)
+        X_data = []
+        Y_data = []
+        
+        for j in range(J):
+            X_j = torch.randn(n_j[j], K)
+            # Create somewhat realistic logistic regression outcomes
+            true_alpha = torch.randn(1) * 0.5
+            true_beta = torch.randn(K) * 0.3
+            logits = true_alpha + torch.matmul(X_j, true_beta)
+            probs = torch.sigmoid(logits)
+            Y_j = torch.bernoulli(probs)
+            
+            X_data.append(X_j)
+            Y_data.append(Y_j)
+        
+        super_funnel = SuperFunnelTorch(J, K, X_data, Y_data)
+        print(f"      Created {super_funnel.get_name()}")
+        print(f"      Total dimension: {super_funnel.dim}")
+        
+        # Use very small proposal variance for super funnel (extremely challenging)
+        super_variance = 0.01
+        num_samples_super = 1000
+        burn_in_super = 200
+        
+        rwm_super = RandomWalkMH_GPU(
+            dim=super_funnel.dim,
+            var=super_variance,
+            target_dist=super_funnel,
+            standard_rwm=True,
+            symmetric=True,
+            pre_allocate_steps=num_samples_super,
+            device='cuda' if torch.cuda.is_available() else 'cpu'
+        )
+        
+        # Generate samples (this is very challenging, so expect low acceptance)
+        torch.manual_seed(987)
+        super_chain = rwm_super.generate_samples(num_samples_super)
+        
+        # Basic checks
+        assert len(super_chain) == num_samples_super, f"Expected {num_samples_super} samples, got {len(super_chain)}"
+        
+        # Post burn-in analysis
+        post_burnin_super = super_chain[burn_in_super:]
+        assert len(post_burnin_super) == num_samples_super - burn_in_super, f"Post burn-in should have {num_samples_super - burn_in_super} samples, got {len(post_burnin_super)}"
+        
+        print(f"      Samples generated: {len(super_chain)}")
+        print(f"      Post burn-in samples: {len(post_burnin_super)}")
+        print(f"      Acceptance rate: {rwm_super.acceptance_rate:.3f}")
+        
+        # For Super Funnel, just check that it runs and produces finite results
+        finite_samples = torch.isfinite(post_burnin_super).all(dim=1).sum().item()
+        finite_fraction = finite_samples / len(post_burnin_super)
+        
+        print(f"      Finite samples fraction: {finite_fraction:.3f}")
+        
+        # Super Funnel is very challenging, so just check basic functionality
+        funnel_test2_pass = (
+            len(super_chain) == num_samples_super and
+            finite_fraction > 0.5 and  # At least half the samples should be finite
+            rwm_super.acceptance_rate > 0.001  # Some minimal acceptance
+        )
+        
+        if funnel_test2_pass:
+            print("   ✅ Super Funnel test passed")
+        else:
+            print("   ⚠️  Super Funnel test results seem unusual")
+        
+        overall_pass = funnel_test1_pass and funnel_test2_pass
+        
+        if overall_pass:
+            print("   ✅ All funnel distribution tests passed")
+        else:
+            print("   ⚠️  Some funnel distribution tests failed")
+            
+        return overall_pass
+        
+    except Exception as e:
+        print(f"   ❌ Funnel distribution test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_burnin_and_sample_counting():
+    """Test burn-in handling and sample counting accuracy."""
+    print("\n🔥 Testing Burn-in and Sample Counting...")
+    
+    try:
+        dim = 4
+        total_samples = 3000
+        burn_in_sizes = [0, 500, 1000, 1500]
+        variance = 1.0
+        
+        target_dist = MultivariateNormalTorch(dim)
+        
+        all_tests_pass = True
+        
+        for burn_in in burn_in_sizes:
+            print(f"   🔍 Testing burn-in = {burn_in}...")
+            
+            if burn_in >= total_samples:
+                print(f"      Skipping (burn-in >= total samples)")
+                continue
+            
+            # Generate samples
+            rwm = RandomWalkMH_GPU(
+                dim=dim,
+                var=variance,
+                target_dist=target_dist,
+                standard_rwm=True,
+                symmetric=True,
+                pre_allocate_steps=total_samples,
+                device='cuda' if torch.cuda.is_available() else 'cpu'
+            )
+            
+            torch.manual_seed(555)
+            full_chain = rwm.generate_samples(total_samples)
+            
+            # Manual burn-in removal
+            if burn_in > 0:
+                post_burnin_manual = full_chain[burn_in:]
+            else:
+                post_burnin_manual = full_chain
+            
+            expected_post_burnin_count = total_samples - burn_in
+            actual_post_burnin_count = len(post_burnin_manual)
+            
+            print(f"      Total samples: {len(full_chain)}")
+            print(f"      Expected post burn-in: {expected_post_burnin_count}")
+            print(f"      Actual post burn-in: {actual_post_burnin_count}")
+            
+            # Test sample counting
+            count_correct = (actual_post_burnin_count == expected_post_burnin_count)
+            
+            if not count_correct:
+                print(f"      ❌ Sample count mismatch!")
+                all_tests_pass = False
+            else:
+                print(f"      ✅ Sample count correct")
+            
+            # Test ESJD calculation with different burn-in sizes
+            if hasattr(rwm, 'expected_squared_jump_distance_gpu'):
+                # For GPU version, we need to manually compute ESJD with burn-in
+                if burn_in > 0:
+                    # Manually compute ESJD excluding burn-in
+                    post_burnin_chain = full_chain[burn_in:]
+                    if len(post_burnin_chain) > 1:
+                        diffs = post_burnin_chain[1:] - post_burnin_chain[:-1]
+                        esjd_manual = torch.mean(torch.sum(diffs**2, dim=1)).item()
+                    else:
+                        esjd_manual = 0.0
+                else:
+                    esjd_manual = rwm.expected_squared_jump_distance_gpu()
+                
+                print(f"      ESJD (manual, burn-in={burn_in}): {esjd_manual:.6f}")
+                
+                # ESJD should be positive for MCMC
+                esjd_reasonable = esjd_manual > 0
+                if not esjd_reasonable:
+                    print(f"      ❌ ESJD seems unreasonable")
+                    all_tests_pass = False
+                else:
+                    print(f"      ✅ ESJD calculation looks good")
+        
+        if all_tests_pass:
+            print("   ✅ All burn-in and sample counting tests passed")
+        else:
+            print("   ⚠️  Some burn-in or sample counting tests failed")
+            
+        return all_tests_pass
+        
+    except Exception as e:
+        print(f"   ❌ Burn-in test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_comprehensive_target_distributions():
+    """Test RWM on various target distributions to ensure broad compatibility."""
+    print("\n🎯 Testing Comprehensive Target Distributions...")
+    
+    try:
+        # Test parameters
+        num_samples = 1000
+        burn_in = 200
+        
+        # Import additional distributions for comprehensive testing
+        from target_distributions import (
+            MultivariateNormalTorch, NealFunnelTorch, 
+            HypercubeTorch, MultimodalTorch, IIDProductTorch
+        )
+        
+        distributions_to_test = [
+            ("MultivariateNormal", lambda: MultivariateNormalTorch(3)),
+            ("NealFunnel", lambda: NealFunnelTorch(4)),
+            ("Hypercube", lambda: HypercubeTorch(3)),
+            ("Multimodal", lambda: MultimodalTorch(2)),
+            ("IIDProduct", lambda: IIDProductTorch(3, component_type='gamma')),
+        ]
+        
+        all_tests_pass = True
+        
+        for dist_name, dist_factory in distributions_to_test:
+            print(f"   🔍 Testing {dist_name}...")
+            
+            try:
+                # Create distribution
+                target_dist = dist_factory()
+                dim = target_dist.dim
+                
+                # Adjust proposal variance based on distribution
+                if 'Funnel' in dist_name:
+                    variance = 0.1  # Funnel needs smaller variance
+                elif 'Multimodal' in dist_name:
+                    variance = 0.5  # Multimodal needs moderate variance
+                else:
+                    variance = 2.38**2 / dim  # Standard optimal variance
+                
+                # Create RWM sampler
+                rwm = RandomWalkMH_GPU(
+                    dim=dim,
+                    var=variance,
+                    target_dist=target_dist,
+                    standard_rwm=True,
+                    symmetric=True,
+                    pre_allocate_steps=num_samples,
+                    device='cuda' if torch.cuda.is_available() else 'cpu'
+                )
+                
+                # Generate samples
+                torch.manual_seed(111 + hash(dist_name) % 1000)
+                chain = rwm.generate_samples(num_samples)
+                
+                # Basic checks
+                assert len(chain) == num_samples, f"Wrong number of samples for {dist_name}"
+                
+                # Post burn-in analysis
+                post_burnin = chain[burn_in:]
+                
+                # Check for finite samples
+                finite_mask = torch.isfinite(post_burnin).all(dim=1)
+                finite_fraction = finite_mask.float().mean().item()
+                
+                # Check acceptance rate
+                acc_rate = rwm.acceptance_rate
+                
+                print(f"      Dimension: {dim}")
+                print(f"      Proposal variance: {variance:.6f}")
+                print(f"      Acceptance rate: {acc_rate:.3f}")
+                print(f"      Finite samples: {finite_fraction:.3f}")
+                
+                # Minimal criteria for success
+                distribution_ok = (
+                    len(chain) == num_samples and
+                    finite_fraction > 0.8 and  # Most samples should be finite
+                    acc_rate > 0.001 and  # Some minimal acceptance
+                    acc_rate < 0.999  # Not accepting everything
+                )
+                
+                if distribution_ok:
+                    print(f"      ✅ {dist_name} test passed")
+                else:
+                    print(f"      ❌ {dist_name} test failed")
+                    all_tests_pass = False
+                    
+            except Exception as e:
+                print(f"      ❌ {dist_name} test crashed: {e}")
+                all_tests_pass = False
+        
+        if all_tests_pass:
+            print("   ✅ All target distribution tests passed")
+        else:
+            print("   ⚠️  Some target distribution tests failed")
+            
+        return all_tests_pass
+        
+    except Exception as e:
+        print(f"   ❌ Comprehensive distribution test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def main():
     """Run all standard RWM tests."""
     print("🚀 Standard RWM GPU Implementation Test Suite")
@@ -630,6 +984,9 @@ def main():
         ("GPU Optimized JIT Kernels", test_gpu_optimized_jit_kernels),
         ("Performance Comparison", test_performance_comparison),
         ("Device Fallback", test_device_fallback),
+        ("Funnel Distributions", test_funnel_distributions),
+        ("Burn-in & Sample Counting", test_burnin_and_sample_counting),
+        ("Comprehensive Distributions", test_comprehensive_target_distributions),
     ]
     
     results = []

@@ -13,6 +13,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from algorithms.rwm_gpu import RandomWalkMH_GPU
 from algorithms.rwm_gpu_optimized import RandomWalkMH_GPU_Optimized
 from target_distributions.multivariate_normal_torch import MultivariateNormalTorch
+# Import new funnel distributions for comprehensive benchmarking
+from target_distributions.funnel_torch import NealFunnelTorch
 
 # Legacy CPU implementation
 from algorithms.rwm import RandomWalkMH
@@ -139,6 +141,92 @@ def benchmark_rwm_implementation(algorithm_class, algorithm_name, target_dist, d
     
     return results, chain
 
+def benchmark_funnel_distributions():
+    """Benchmark RWM on new funnel distributions."""
+    print("\n" + "=" * 50)
+    print("🌪️ New Distributions Benchmark")
+    print("=" * 50)
+    
+    # Test parameters - smaller for challenging distributions
+    dim = 10
+    num_samples = 5000
+    
+    distributions_to_test = [
+        ("Neal's Funnel", lambda d: NealFunnelTorch(dimension=d), 0.1),  # Small variance for funnel
+        ("Multivariate Normal", lambda d: MultivariateNormalTorch(d), 2.38**2 / d),  # Standard optimal variance
+    ]
+    
+    print(f"Configuration:")
+    print(f"  Dimension: {dim}")
+    print(f"  Number of Samples: {num_samples}")
+    print(f"  GPU Available: {torch.cuda.is_available()}")
+    
+    all_results = []
+    
+    for dist_name, dist_factory, variance in distributions_to_test:
+        print(f"\n--- Benchmarking {dist_name} ---")
+        
+        try:
+            target_dist = dist_factory(dim)
+            print(f"Target Distribution: {target_dist.get_name()}")
+            print(f"Proposal Variance: {variance:.6f}")
+            
+            # Test GPU implementations
+            implementations = [
+                ("GPU Standard", RandomWalkMH_GPU, {"standard_rwm": True}),
+                ("GPU Optimized", RandomWalkMH_GPU_Optimized, {"use_efficient_rng": True, "compile_mode": None}),
+            ]
+            
+            dist_results = []
+            
+            for impl_name, impl_class, kwargs in implementations:
+                try:
+                    results, chain = benchmark_rwm_implementation(
+                        impl_class, f"{impl_name} ({dist_name})", target_dist, 
+                        dim, variance, num_samples, **kwargs
+                    )
+                    dist_results.append(results)
+                    
+                    # Additional analysis for challenging distributions
+                    if 'Funnel' in dist_name:
+                        # Analyze burn-in requirements
+                        burn_in = 1000
+                        post_burnin = chain[burn_in:]
+                        
+                        # Check v variable (first dimension) for funnel
+                        if len(post_burnin) > 0:
+                            v_samples = post_burnin[:, 0] if hasattr(post_burnin, '__getitem__') else post_burnin[:, 0]
+                            v_mean = torch.mean(v_samples) if isinstance(v_samples, torch.Tensor) else np.mean(v_samples)
+                            v_std = torch.std(v_samples) if isinstance(v_samples, torch.Tensor) else np.std(v_samples)
+                            
+                            print(f"      Post burn-in ({burn_in}) samples: {len(post_burnin)}")
+                            print(f"      V variable mean: {v_mean:.3f} (target: ~0)")
+                            print(f"      V variable std: {v_std:.3f} (target: ~3)")
+                    
+                except Exception as e:
+                    print(f"Error with {impl_name} on {dist_name}: {e}")
+            
+            all_results.extend(dist_results)
+            
+        except Exception as e:
+            print(f"Error creating {dist_name}: {e}")
+    
+    # Summary comparison
+    if all_results:
+        print(f"\n" + "=" * 50)
+        print("📊 New Distributions Summary")
+        print("=" * 50)
+        print(f"{'Implementation':<40} {'Samples/sec':<12} {'Accept Rate':<12} {'ESJD':<10}")
+        print("-" * 80)
+        
+        for result in all_results:
+            print(f"{result['algorithm']:<40} "
+                  f"{result['samples_per_sec_gpu']:<12.1f} "
+                  f"{result['acceptance_rate']:<12.3f} "
+                  f"{result['esjd']:<10.6f}")
+    
+    return all_results
+
 def main():
     """Run comprehensive benchmarks."""
     print("RWM GPU Optimization Benchmark")
@@ -224,6 +312,11 @@ def main():
             speedup = result['samples_per_sec_gpu'] / baseline['samples_per_sec_gpu']
             print(f"{result['algorithm']:<30} {result['samples_per_sec_gpu']:<12.1f} {speedup:<8.2f}x "
                   f"{result['acceptance_rate']:<12.3f} {result['esjd']:<10.6f}")
+    
+    try:
+        new_dist_results = benchmark_funnel_distributions()
+    except Exception as e:
+        print(f"Error with new distributions benchmark: {e}")
 
 if __name__ == "__main__":
     main() 
