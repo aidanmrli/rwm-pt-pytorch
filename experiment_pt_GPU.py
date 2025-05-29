@@ -31,22 +31,22 @@ def get_target_distribution(name, dim, use_torch=True, device=None, **kwargs):
             return MultivariateNormalTorch(dim, device=device)
         elif name == "RoughCarpet":
             # Custom mode centers and weights for better separation
-            mode_centers = kwargs.get('mode_centers', [-4.0, 0.0, 4.0]) 
+            mode_centers = kwargs.get('mode_centers', [-15.0, 0.0, 15.0]) 
             mode_weights = kwargs.get('mode_weights', [0.5, 0.3, 0.2])   
             return RoughCarpetDistributionTorch(dim, scaling=False, device=device, 
                                               mode_centers=mode_centers, mode_weights=mode_weights)
         elif name == "RoughCarpetScaled":
             # Custom mode centers and weights for better separation
-            mode_centers = kwargs.get('mode_centers', [-4.0, 0.0, 4.0])
+            mode_centers = kwargs.get('mode_centers', [-15.0, 0.0, 15.0])
             mode_weights = kwargs.get('mode_weights', [0.5, 0.3, 0.2])   
             return RoughCarpetDistributionTorch(dim, scaling=True, device=device,
                                               mode_centers=mode_centers, mode_weights=mode_weights)
         elif name == "ThreeMixture":
             # Custom mode centers for better separation (4.0 units between adjacent modes)
             mode_centers = kwargs.get('mode_centers', [
-                [-5.0] + [0.0] * (dim - 1),  # (-4, 0, ..., 0)
+                [-15.0] + [0.0] * (dim - 1),  # (-4, 0, ..., 0)
                 [0.0] * dim,                  # (0, 0, ..., 0)
-                [5.0] + [0.0] * (dim - 1)    # (4, 0, ..., 0)
+                [15.0] + [0.0] * (dim - 1)    # (4, 0, ..., 0)
             ])
             mode_weights = kwargs.get('mode_weights', [1/3, 1/3, 1/3])
             return ThreeMixtureDistributionTorch(dim, scaling=False, device=device,
@@ -54,9 +54,9 @@ def get_target_distribution(name, dim, use_torch=True, device=None, **kwargs):
         elif name == "ThreeMixtureScaled":
             # Custom mode centers for better separation (4.0 units between adjacent modes)
             mode_centers = kwargs.get('mode_centers', [
-                [-5.0] + [0.0] * (dim - 1),  # (-4, 0, ..., 0)
+                [-15.0] + [0.0] * (dim - 1),  # (-4, 0, ..., 0)
                 [0.0] * dim,                  # (0, 0, ..., 0)
-                [5.0] + [0.0] * (dim - 1)    # (4, 0, ..., 0)
+                [15.0] + [0.0] * (dim - 1)    # (4, 0, ..., 0)
             ])
             mode_weights = kwargs.get('mode_weights', [1/3, 1/3, 1/3])  
             return ThreeMixtureDistributionTorch(dim, scaling=True, device=device,
@@ -160,7 +160,7 @@ def get_target_distribution(name, dim, use_torch=True, device=None, **kwargs):
         else:
             raise ValueError("Unknown target distribution name")
 
-def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max=0.6, seed=42, burn_in=1000, **kwargs):
+def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max=0.5, seed=42, burn_in=1000, **kwargs):
     """Run many parallel tempering simulations with different swap acceptance rates, then save and plot the progression of ESJD and acceptance rate."""
     
     # Set device explicitly
@@ -193,7 +193,7 @@ def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max
         print(f"{'='*60}")
     
     target_distribution = get_target_distribution(target_name, dim, use_torch=True, device=device, **kwargs)
-    swap_acceptance_rates_range = np.linspace(0.01, swap_accept_max, 40)
+    swap_acceptance_rates_range = np.linspace(0.01, swap_accept_max, 30)
     
     acceptance_rates = []
     expected_squared_jump_distances = []
@@ -222,7 +222,8 @@ def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max
             burn_in=burn_in,
             device=device,
             beta_ladder=constructed_beta_ladder,
-            swap_acceptance_rate=target_swap_rate
+            swap_acceptance_rate=target_swap_rate,
+            iterative_temp_spacing=True  # Use iterative ladder construction as default
         )
         
         # Get the constructed beta ladder from the first simulation to reuse
@@ -290,7 +291,8 @@ def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max
         burn_in=burn_in,
         device=device,
         beta_ladder=constructed_beta_ladder,
-        swap_acceptance_rate=max_constr_acceptance_rate
+        swap_acceptance_rate=max_constr_acceptance_rate,
+        iterative_temp_spacing=True  # Use iterative ladder construction as default
     )
     
     traceplot_chain = traceplot_simulation.generate_samples(progress_bar=False)
@@ -486,8 +488,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GPU-accelerated Parallel Tempering simulations")
     parser.add_argument("--dim", type=int, default=20, help="Dimension of the target distribution")
     parser.add_argument("--target", type=str, default="ThreeMixture", help="Target distribution")
-    parser.add_argument("--num_iters", type=int, default=100000, help="Number of iterations")
-    parser.add_argument("--swap_accept_max", type=float, default=0.6, help="Maximum swap acceptance rate value")
+    parser.add_argument("--num_iters", type=int, default=200000, help="Number of iterations")
+    parser.add_argument("--swap_accept_max", type=float, default=0.5, help="Maximum swap acceptance rate value")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--burn_in", type=int, default=1000, help="Number of burn-in samples")
     parser.add_argument("--hybrid_rosenbrock_n1", type=int, default=3, help="Block length parameter for HybridRosenbrock")

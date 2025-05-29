@@ -30,7 +30,8 @@ class MCMCSimulation_GPU:
                  swap_acceptance_rate: Optional[float] = None,
                  device: Optional[str] = None,
                  pre_allocate: bool = True,
-                 burn_in: int = 0):
+                 burn_in: int = 0,
+                 **kwargs):
         """
         Initialize GPU-accelerated MCMC simulation.
         
@@ -47,6 +48,8 @@ class MCMCSimulation_GPU:
             device: GPU device to use ('cuda', 'cpu', or None for auto-detection)
             pre_allocate: Whether to pre-allocate GPU memory for chains
             burn_in: Number of initial samples to discard for MCMC burn-in (default: 0)
+            **kwargs: Additional algorithm-specific parameters (e.g., iterative_temp_spacing 
+                     for parallel tempering algorithms)
         """
         self.num_iterations = num_iterations
         self.burn_in = max(0, min(burn_in, num_iterations - 1))
@@ -64,7 +67,8 @@ class MCMCSimulation_GPU:
                     pre_allocate_steps=num_iterations if pre_allocate else None,
                     beta_ladder=beta_ladder,
                     swap_acceptance_rate=swap_acceptance_rate,
-                    burn_in=burn_in
+                    burn_in=burn_in,
+                    **kwargs
                 )
             else:
                 # Regular GPU RWM algorithm
@@ -73,7 +77,8 @@ class MCMCSimulation_GPU:
                     device=device, 
                     pre_allocate_steps=num_iterations if pre_allocate else None,
                     beta=beta_ladder[0] if beta_ladder else 1.0,
-                    burn_in=burn_in
+                    burn_in=burn_in,
+                    **kwargs
                 )
         else:
             # Standard algorithm
@@ -81,7 +86,8 @@ class MCMCSimulation_GPU:
                 dim, sigma, target_dist, symmetric, 
                 beta_ladder=beta_ladder, 
                 swap_acceptance_rate=swap_acceptance_rate,
-                burn_in=burn_in
+                burn_in=burn_in,
+                **kwargs
             )
         
         # Set random seed
