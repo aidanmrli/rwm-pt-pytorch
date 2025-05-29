@@ -7,7 +7,6 @@ import numpy as np
 from target_distributions import *
 import matplotlib.pyplot as plt
 import json
-import tqdm
 import os
 
 def calculate_hybrid_rosenbrock_dim(n1, n2):
@@ -118,8 +117,9 @@ def get_target_distribution(name, dim, use_torch=True, **kwargs):
         else:
             raise ValueError("Unknown target distribution name")
 
-def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, seed=42, burn_in=1000, **kwargs):
-    """Run many simulations with different variance values, then save and plot the progression of ESJD and acceptance rate."""
+def run_single_simulation(dim, target_name="MultivariateNormal", num_iters=50000, 
+                         proposal_variance=None, seed=42, burn_in=1000, **kwargs):
+    """Run a single MCMC simulation with specified proposal variance and plot results immediately."""
     
     # Handle special dimension calculations
     if target_name == "HybridRosenbrock":
@@ -127,100 +127,42 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         n2 = kwargs.get('n2', 5)
         actual_dim = calculate_hybrid_rosenbrock_dim(n1, n2)
         print(f"\n{'='*60}")
-        print(f"Target: {target_name}, n1={n1}, n2={n2}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
+        print(f"Target: {target_name}, n1={n1}, n2={n2}, Actual Dimension: {actual_dim}")
+        print(f"Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     elif target_name == "SuperFunnel":
         J = kwargs.get('J', 5)
         K = kwargs.get('K', 3)
         actual_dim = calculate_super_funnel_dim(J, K)
         print(f"\n{'='*60}")
-        print(f"Target: {target_name}, J={J}, K={K}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
+        print(f"Target: {target_name}, J={J}, K={K}, Actual Dimension: {actual_dim}")
+        print(f"Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     else:
         actual_dim = dim
         print(f"\n{'='*60}")
-        print(f"Target: {target_name}, Dimension: {dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
+        print(f"Target: {target_name}, Dimension: {dim}")
+        print(f"Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     
+    # Set default proposal variance if not provided
+    if proposal_variance is None:
+        # Use a reasonable default: optimal scaling suggests variance ~ 2.38^2 / dim
+        proposal_variance = (2.38 ** 2) / actual_dim
+        print(f"Using default proposal variance: {proposal_variance:.6f}")
+    else:
+        print(f"Using specified proposal variance: {proposal_variance:.6f}")
+    
+    # Create target distribution
     target_distribution = get_target_distribution(target_name, dim, use_torch=True, **kwargs)
-    var_value_range = np.linspace(0.01, var_max, 40)
     
-    acceptance_rates = []
-    expected_squared_jump_distances = []
-    times = []
+    print(f"\nRunning MCMC simulation...")
+    start_time = time.time()
     
-    print(f"\nRunning simulations with {len(var_value_range)} variance values...")
-    
-    total_start = time.time()
-    
-    # Use tqdm for progress bar
-    for i, var in enumerate(tqdm.tqdm(var_value_range, desc="Running RWM with current variance =", unit="config")):
-        proposal_variance = (var ** 2) / (actual_dim ** (1))
-        iteration_start = time.time()
-        
-        simulation = MCMCSimulation_GPU(
-            dim=actual_dim,
-            sigma=proposal_variance,
-            num_iterations=num_iters,
-            algorithm=RandomWalkMH_GPU_Optimized,
-            target_dist=target_distribution,
-            symmetric=True,
-            pre_allocate=True,
-            seed=seed,
-            burn_in=burn_in
-        )
-        
-        chain = simulation.generate_samples(progress_bar=False)
-        
-        iteration_time = time.time() - iteration_start
-        times.append(iteration_time)
-        
-        acceptance_rates.append(simulation.acceptance_rate())
-        expected_squared_jump_distances.append(simulation.expected_squared_jump_distance())
-    
-    total_time = time.time() - total_start
-    
-    max_esjd = max(expected_squared_jump_distances)
-    max_esjd_index = np.argmax(expected_squared_jump_distances)
-    max_acceptance_rate = acceptance_rates[max_esjd_index]
-    max_variance_value = var_value_range[max_esjd_index]
-    
-    print(f"\nFinal Results:")
-    print(f"   Total time: {total_time:.1f} seconds")
-    print(f"   Average time per configuration: {np.mean(times):.1f} seconds")
-    print(f"   Maximum ESJD: {max_esjd:.6f}")
-    print(f"   Optimal acceptance rate: {max_acceptance_rate:.3f}")
-    print(f"   Optimal variance value: {max_variance_value:.6f}")
-    
-    # Save results
-    data = {
-        'target_distribution': target_name,
-        'dimension': actual_dim,
-        'num_iterations': num_iters,
-        'seed': seed,
-        'total_time': total_time,
-        'max_esjd': max_esjd,
-        'max_acceptance_rate': max_acceptance_rate,
-        'max_variance_value': max_variance_value,
-        'expected_squared_jump_distances': expected_squared_jump_distances,
-        'acceptance_rates': acceptance_rates,
-        'var_value_range': var_value_range.tolist(),
-        'times': times
-    }
-    
-    filename = f"data/{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.json"
-    with open(filename, "w") as file:
-        json.dump(data, file, indent=2)
-    print(f"   Results saved to: {filename}")
-    
-    # Create traceplot using optimal variance
-    print(f"\nGenerating traceplot with optimal variance ({max_variance_value:.6f})...")
-    optimal_proposal_variance = (max_variance_value ** 2) / (actual_dim ** (1))
-    
-    # Run one more simulation with optimal variance to get chain for traceplot
-    traceplot_simulation = MCMCSimulation_GPU(
+    # Run simulation
+    simulation = MCMCSimulation_GPU(
         dim=actual_dim,
-        sigma=optimal_proposal_variance,
+        sigma=proposal_variance,
         num_iterations=num_iters,
         algorithm=RandomWalkMH_GPU_Optimized,
         target_dist=target_distribution,
@@ -230,31 +172,67 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         burn_in=burn_in
     )
     
-    traceplot_chain = traceplot_simulation.generate_samples(progress_bar=False)
+    chain = simulation.generate_samples(progress_bar=True)
     
-    # Create traceplot figure
+    simulation_time = time.time() - start_time
+    acceptance_rate = simulation.acceptance_rate()
+    esjd = simulation.expected_squared_jump_distance()
+    
+    print(f"\nSimulation Results:")
+    print(f"   Time: {simulation_time:.1f} seconds")
+    print(f"   Acceptance rate: {acceptance_rate:.3f}")
+    print(f"   ESJD: {esjd:.6f}")
+    print(f"   Samples per second: {num_iters/simulation_time:.0f}")
+    
+    # Save results
+    data = {
+        'target_distribution': target_name,
+        'dimension': actual_dim,
+        'num_iterations': num_iters,
+        'proposal_variance': proposal_variance,
+        'seed': seed,
+        'simulation_time': simulation_time,
+        'acceptance_rate': acceptance_rate,
+        'esjd': esjd,
+        'burn_in': burn_in
+    }
+    
+    # Ensure data directory exists
+    os.makedirs("data", exist_ok=True)
+    
+    filename = f"data/{target_name}_single_run_dim{actual_dim}_{num_iters}iters_var{proposal_variance:.6f}_seed{seed}.json"
+    with open(filename, "w") as file:
+        json.dump(data, file, indent=2)
+    print(f"   Results saved to: {filename}")
+    
+    # Get chain data for plotting
+    if hasattr(simulation.algorithm, 'get_chain_gpu'):
+        chain_data = simulation.algorithm.get_chain_gpu().cpu().numpy()
+    else:
+        chain_data = np.array(simulation.algorithm.chain)
+    
+    # Apply burn-in for visualization
+    if len(chain_data) > burn_in:
+        chain_data = chain_data[burn_in:]
+    
+    print(f"\nGenerating plots...")
+    
+    # Ensure images directory exists
+    os.makedirs("images", exist_ok=True)
+    
+    # Create traceplot
     plt.figure(figsize=(12, 8))
     
-    # Get chain data - use GPU tensor if available for efficiency
-    if hasattr(traceplot_simulation.algorithm, 'get_chain_gpu'):
-        chain_data = traceplot_simulation.algorithm.get_chain_gpu().cpu().numpy()
-    else:
-        chain_data = np.array(traceplot_simulation.algorithm.chain)
-    
-    # Apply burn-in (skip first 1000 samples for visualization)
-    burn_in_samples = burn_in  # Use 10% or 1000, whichever is smaller
-    if len(chain_data) > burn_in_samples:
-        chain_data = chain_data[burn_in_samples:]
-    
-    # Determine number of dimensions to plot (max 3)
-    num_dims_to_plot = min(3, actual_dim)
+    # Determine number of dimensions to plot (max 4)
+    num_dims_to_plot = min(4, actual_dim)
     
     if num_dims_to_plot == 1:
         # Single dimension plot
         plt.plot(chain_data[:, 0], alpha=0.7, linewidth=0.5, color='blue')
-        plt.xlabel('Iteration')
+        plt.xlabel('Iteration (after burn-in)')
         plt.ylabel('Value')
-        plt.title(f'Traceplot - {target_name} (Dimension 1)\nOptimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+        plt.title(f'Traceplot - {target_name} (Dimension 1)\n'
+                 f'Proposal variance: {proposal_variance:.6f}, Acceptance rate: {acceptance_rate:.3f}, ESJD: {esjd:.6f}')
         plt.grid(True, alpha=0.3)
     else:
         # Multiple dimensions subplot
@@ -265,25 +243,23 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
             plt.grid(True, alpha=0.3)
             
             if i == 0:
-                plt.title(f'Traceplot - {target_name} (First {num_dims_to_plot} dimensions)\nOptimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+                plt.title(f'Traceplot - {target_name} (First {num_dims_to_plot} dimensions)\n'
+                         f'Proposal variance: {proposal_variance:.6f}, Acceptance rate: {acceptance_rate:.3f}, ESJD: {esjd:.6f}')
             if i == num_dims_to_plot - 1:
-                plt.xlabel('Iteration')
+                plt.xlabel('Iteration (after burn-in)')
     
     plt.tight_layout()
     
-    # Ensure images directory exists
-    os.makedirs("images", exist_ok=True)
-    
     # Save traceplot
-    output_filename = f"images/traceplot_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
-    plt.savefig(output_filename, dpi=300, bbox_inches='tight')
-    plt.clf()
+    traceplot_filename = f"images/traceplot_{target_name}_single_run_dim{actual_dim}_{num_iters}iters_var{proposal_variance:.6f}_seed{seed}.png"
+    plt.savefig(traceplot_filename, dpi=300, bbox_inches='tight')
+    plt.show()  # Display immediately
     plt.close()
-    print(f"   Traceplot created and saved as '{output_filename}'")
+    print(f"   Traceplot saved as '{traceplot_filename}'")
     
-    # Create 2D density visualization with MCMC trajectory overlay
+    # Create 2D density visualization if dimension >= 2
     if actual_dim >= 2:
-        print(f"Creating 2D density visualization with MCMC trajectory...")
+        print(f"   Creating 2D density visualization...")
         
         plt.figure(figsize=(10, 8))
         
@@ -291,12 +267,12 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         x_chain = chain_data[:, 0]
         y_chain = chain_data[:, 1]
         
-        # Determine plot bounds based on chain data with very minimal padding
+        # Determine plot bounds based on chain data with minimal padding
         x_min, x_max = np.min(x_chain), np.max(x_chain)
         y_min, y_max = np.min(y_chain), np.max(y_chain)
         x_range = x_max - x_min
         y_range = y_max - y_min
-        padding = 0.02  # 2% padding
+        padding = 0.05  # 5% padding
         
         x_plot_min = x_min - padding * x_range
         x_plot_max = x_max + padding * x_range
@@ -304,8 +280,8 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         y_plot_max = y_max + padding * y_range
         
         # Create grid for density evaluation
-        x_grid = np.linspace(x_plot_min, x_plot_max, 100)
-        y_grid = np.linspace(y_plot_min, y_plot_max, 100)
+        x_grid = np.linspace(x_plot_min, x_plot_max, 80)
+        y_grid = np.linspace(y_plot_min, y_plot_max, 80)
         X, Y = np.meshgrid(x_grid, y_grid)
         
         # Evaluate target density on the grid
@@ -313,7 +289,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         for i in range(X.shape[0]):
             for j in range(X.shape[1]):
                 # Create a point with the first two dimensions from the grid
-                # and remaining dimensions set to zero (or mean values)
+                # and remaining dimensions set to mean values from chain
                 point = np.zeros(actual_dim)
                 point[0] = X[i, j]
                 point[1] = Y[i, j]
@@ -322,7 +298,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
                 if actual_dim > 2:
                     point[2:] = np.mean(chain_data[:, 2:], axis=0)
                 
-                # Evaluate density - handle both PyTorch and numpy distributions
+                # Evaluate density
                 try:
                     if hasattr(target_distribution, 'density'):
                         # Check if it's a PyTorch distribution that needs tensor input
@@ -357,47 +333,68 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         # Add contour lines for better visualization
         plt.contour(X, Y, Z, levels=10, colors='white', alpha=0.3, linewidths=0.5)
         
-        # Plot MCMC trajectory
-        # Use 5% of total samples for trajectory visualization
-        num_traj_points = int(0.05 * len(x_chain))
-        if len(x_chain) > num_traj_points:
-            indices = np.linspace(0, len(x_chain)-1, num_traj_points, dtype=int)
-            x_traj = x_chain[indices]
-            y_traj = y_chain[indices]
-        else:
-            x_traj = x_chain
-            y_traj = y_chain
-        
-        # Plot trajectory as very thin line with smaller, less frequent dots
-        # plt.plot(x_traj, y_traj, 'r-', alpha=0.4, linewidth=0.3, label='MCMC Trajectory')
-        plt.scatter(x_traj[::max(1, len(x_traj)//200)], y_traj[::max(1, len(y_traj)//200)], 
-                   c='red', s=3, alpha=0.6, zorder=5, label='MCMC Samples')
+        # Plot MCMC samples
+        # Use subset of samples for visualization (every 10th sample)
+        sample_indices = np.arange(0, len(x_chain), max(1, len(x_chain)//1000))
+        plt.scatter(x_chain[sample_indices], y_chain[sample_indices], 
+                   c='red', s=2, alpha=0.6, zorder=5, label='MCMC Samples')
         
         plt.xlabel('Dimension 1')
         plt.ylabel('Dimension 2')
         plt.title(f'2D Target Density with MCMC Samples - {target_name}\n'
-                 f'Optimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
-        # plt.legend()
+                 f'Proposal variance: {proposal_variance:.6f}, Acceptance rate: {acceptance_rate:.3f}, ESJD: {esjd:.6f}')
+        plt.legend()
         plt.grid(True, alpha=0.3)
         
         # Save 2D visualization
-        density_filename = f"images/density2D_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
+        density_filename = f"images/density2D_{target_name}_single_run_dim{actual_dim}_{num_iters}iters_var{proposal_variance:.6f}_seed{seed}.png"
         plt.savefig(density_filename, dpi=300, bbox_inches='tight')
-        plt.clf()
+        plt.show()  # Display immediately
         plt.close()
-        print(f"   2D density visualization created and saved as '{density_filename}'")
-
+        print(f"   2D density visualization saved as '{density_filename}'")
+    
+    # Create histogram of marginal distributions
+    if actual_dim <= 6:  # Only for low dimensions to keep plots readable
+        print(f"   Creating marginal distribution histograms...")
+        
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        axes = axes.flatten()
+        
+        for i in range(min(actual_dim, 6)):
+            axes[i].hist(chain_data[:, i], bins=50, alpha=0.7, density=True, color=f'C{i}')
+            axes[i].set_xlabel(f'Dimension {i + 1}')
+            axes[i].set_ylabel('Density')
+            axes[i].set_title(f'Marginal Distribution - Dim {i + 1}')
+            axes[i].grid(True, alpha=0.3)
+        
+        # Hide unused subplots
+        for i in range(actual_dim, 6):
+            axes[i].set_visible(False)
+        
+        plt.suptitle(f'Marginal Distributions - {target_name}\n'
+                    f'Proposal variance: {proposal_variance:.6f}, Acceptance rate: {acceptance_rate:.3f}')
+        plt.tight_layout()
+        
+        # Save histogram
+        hist_filename = f"images/histograms_{target_name}_single_run_dim{actual_dim}_{num_iters}iters_var{proposal_variance:.6f}_seed{seed}.png"
+        plt.savefig(hist_filename, dpi=300, bbox_inches='tight')
+        plt.show()  # Display immediately
+        plt.close()
+        print(f"   Marginal histograms saved as '{hist_filename}'")
+    
+    print(f"\nAll plots generated and displayed!")
     return data
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="GPU-accelerated RWM simulations")
-    parser.add_argument("--dim", type=int, default=20, help="Dimension of the target distribution")
+    parser = argparse.ArgumentParser(description="Single GPU-accelerated RWM simulation with immediate plotting")
+    parser.add_argument("--dim", type=int, default=10, help="Dimension of the target distribution")
     parser.add_argument("--target", type=str, default="MultivariateNormal", help="Target distribution")
-    parser.add_argument("--num_iters", type=int, default=100000, help="Number of iterations")
-    parser.add_argument("--var_max", type=float, default=3.5, help="Maximum variance value")
+    parser.add_argument("--num_iters", type=int, default=50000, help="Number of iterations")
+    parser.add_argument("--proposal_variance", type=float, default=None, help="Proposal variance (default: 2.38^2/dim)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--burn_in", type=int, default=1000, help="Burn-in period")
     
+    # Distribution-specific parameters
     parser.add_argument("--hybrid_rosenbrock_n1", type=int, default=3, help="Block length parameter for HybridRosenbrock")
     parser.add_argument("--hybrid_rosenbrock_n2", type=int, default=5, help="Number of blocks/rows for HybridRosenbrock")
     
@@ -416,7 +413,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if torch.cuda.is_available():
-        print(f" GPU detected: {torch.cuda.get_device_name()}")
+        print(f"🚀 GPU detected: {torch.cuda.get_device_name()}")
         print(f"   CUDA version: {torch.version.cuda}")
         print(f"   GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
     else:
@@ -437,6 +434,14 @@ if __name__ == "__main__":
         kwargs['prior_hypermean_std'] = args.super_funnel_prior_hypermean_std
         kwargs['prior_tau_scale'] = args.super_funnel_prior_tau_scale
     
-    results = run_study(args.dim, args.target, args.num_iters, args.var_max, args.seed, args.burn_in, **kwargs)
+    results = run_single_simulation(
+        dim=args.dim, 
+        target_name=args.target, 
+        num_iters=args.num_iters, 
+        proposal_variance=args.proposal_variance,
+        seed=args.seed, 
+        burn_in=args.burn_in, 
+        **kwargs
+    )
 
-    print(f"Finished running experiment.") 
+    print(f"\nExperiment completed successfully!") 
