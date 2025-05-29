@@ -380,7 +380,7 @@ class RoughCarpetDistributionTorch(TorchTargetDistribution):
         base_name = "RoughCarpetTorch"
         
         # Check if using default parameters
-        default_centers = [-15.0, 0.0, 15.0]
+        default_centers = [-5.0, 0.0, 5.0]
         default_weights = [0.5, 0.3, 0.2]
         
         # Convert to tensors for comparison
