@@ -278,8 +278,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         symmetric=True,
         pre_allocate=True,
         seed=seed,
-        burn_in=burn_in
-        burn_in=1000,
+        burn_in=burn_in,
         device=device
     )
     
