@@ -15,10 +15,10 @@ class NealFunnelTorch(TorchTargetDistribution):
                - 0.5 * (D-1) * v - 0.5 * exp(-v) * sum_{k=1}^{D-1} (z_k - mu_z)^2
     """
 
-    def __init__(self, dimension, mu_v=0.0, sigma_v_sq=9.0, mu_z=0.0, device=None):
-        super().__init__(dimension, device)
-        if dimension < 1:
-            raise ValueError("Dimension must be at least 1 for Neal's Funnel (v variable).")
+    def __init__(self, dim, mu_v=0.0, sigma_v_sq=9.0, mu_z=0.0, device=None):
+        super().__init__(dim, device)
+        if dim < 1:
+            raise ValueError("dim must be at least 1 for Neal's Funnel (v variable).")
 
         self.mu_v = torch.tensor(mu_v, device=self.device, dtype=torch.float32)
         self.sigma_v_sq = torch.tensor(sigma_v_sq, device=self.device, dtype=torch.float32)
@@ -131,8 +131,8 @@ class SuperFunnelTorch(TorchTargetDistribution):
         self.J = J
         self.K = K
         # Dim: J (alphas) + J*K (betas) + 1 (mu_alpha) + K (mu_beta) + 1 (tau_alpha) + 1 (tau_beta)
-        dimension = J + J * K + 1 + K + 1 + 1
-        super().__init__(dimension, device)
+        dim = J + J * K + 1 + K + 1 + 1
+        super().__init__(dim, device)
 
         if not (isinstance(X_data, list) and len(X_data) == J):
             raise ValueError(f"X_data must be a list of J={J} tensors.")
