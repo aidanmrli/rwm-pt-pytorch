@@ -119,7 +119,7 @@ class ParallelTemperingRWM_GPU_Optimized(MHAlgorithm):
                  iterative_pn_clamp_min: float = -10.0,
                  iterative_pn_clamp_max: float = 10.0,
                  iterative_fail_tol_factor: float = 3.0,
-                 swap_every: int = 20,
+                 swap_every: int = 100,
                  burn_in: int = 0,
                  device: str = None,
                  pre_allocate_steps: int = None,
@@ -527,6 +527,8 @@ class ParallelTemperingRWM_GPU_Optimized(MHAlgorithm):
             self.chain_indices[:] = 0
         self.precomputed_swap_randoms = None
         self.swap_random_index = 0
+        # Clear chain cache for performance fix
+        self._chain_cache = None
     
     def step(self):
         """Take a step for all chains with optional swapping."""
@@ -557,9 +559,6 @@ class ParallelTemperingRWM_GPU_Optimized(MHAlgorithm):
         
         # Step 7: Store states in chains
         self._add_states_to_chains()
-        
-        # Update main chain to be the cold chain (beta=1.0)
-        self.chain = self._get_cold_chain_cpu()
     
     def _generate_all_increments(self):
         """Generate proposal increments for all chains in parallel."""
@@ -638,6 +637,9 @@ class ParallelTemperingRWM_GPU_Optimized(MHAlgorithm):
             
             for i in range(self.num_chains):
                 self.gpu_chains[i].append(self.current_states[i].clone())
+        
+        # Invalidate chain cache since we added new states
+        self._chain_cache = None
     
     def _get_cold_chain_cpu(self):
         """Get the cold chain (beta=1.0) as CPU numpy array for compatibility."""
@@ -665,6 +667,18 @@ class ParallelTemperingRWM_GPU_Optimized(MHAlgorithm):
         """Get the cold chain (beta=1.0) as GPU tensor."""
         chains = self.get_all_chains_gpu()
         return chains[0] if chains else torch.empty(0, self.dim, device=self.device)
+    
+    @property
+    def chain(self):
+        """Lazy property for chain access - only transfers from GPU when needed."""
+        if not hasattr(self, '_chain_cache') or self._chain_cache is None:
+            self._chain_cache = self._get_cold_chain_cpu()
+        return self._chain_cache
+    
+    @chain.setter  
+    def chain(self, value):
+        """Allow setting the chain directly."""
+        self._chain_cache = value
     
     def generate_samples(self, num_samples: int):
         """Generate samples using ultra-optimized parallel tempering.
@@ -717,6 +731,11 @@ class ParallelTemperingRWM_GPU_Optimized(MHAlgorithm):
         
         # Calculate offset: skip initial state + burn-in samples
         burn_in_offset = 1 + self.burn_in
+        
+        # PERFORMANCE FIX: Set the cold chain for parent class compatibility ONLY at the end
+        # This avoids the expensive CPU transfer that was happening every step
+        self.chain = self._get_cold_chain_cpu()
+        
         return cold_chain[burn_in_offset:]
     
     def expected_squared_jump_distance_gpu(self):
