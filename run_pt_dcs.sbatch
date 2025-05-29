@@ -9,9 +9,9 @@
 #SBATCH --mem=20G
 #SBATCH --gres=gpu:1
 #SBATCH --nodelist=concerto[1-3],overture,quartet[1-3,5],dgx1,sonata2,bulbasaur,charmander,squirtle
-#SBATCH --array=1-20
-#SBATCH --output=logs/rwm_%j.out
-#SBATCH --error=logs/rwm_%j.err
+#SBATCH --array=1-20%10
+#SBATCH --output=logs/pt_dcs_%j.out
+#SBATCH --error=logs/pt_dcs_%j.err
 
 # Options for GPU: 
 # concerto[1-3],overture
@@ -29,7 +29,7 @@ mkdir -p logs
 # ThreeMixture, ThreeMixtureScaled, 
 # IIDGamma, IIDBeta, Hypercube
 # FullRosenbrock, EvenRosenbrock, HybridRosenbrock
-TARGET_DISTRIBUTION="ThreeMixture"
+TARGET_DISTRIBUTION="RoughCarpet"
 
 python experiment_pt_GPU.py \
     --target $TARGET_DISTRIBUTION \
