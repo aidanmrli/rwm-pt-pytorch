@@ -16,7 +16,7 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
             scaling: Whether to apply random scaling factors to coordinates
             device: PyTorch device for GPU acceleration
             mode_centers: List/array of 3 mode centers, each of length dim.
-                         Default: [[-15, 0, ..., 0], [0, 0, ..., 0], [15, 0, ..., 0]]
+                         Default: [[-5, 0, ..., 0], [0, 0, ..., 0], [5, 0, ..., 0]]
             mode_weights: List/array of 3 mixing weights that sum to 1.
                          Default: [1/3, 1/3, 1/3]
         """
@@ -253,7 +253,7 @@ class RoughCarpetDistributionTorch(TorchTargetDistribution):
             scaling: Whether to apply random scaling factors to coordinates
             device: PyTorch device for GPU acceleration
             mode_centers: List/array of 3 scalar mode centers for 1D components.
-                         Default: [-15.0, 0.0, 15.0]
+                         Default: [-5.0, 0.0, 5.0]
             mode_weights: List/array of 3 mixing weights that sum to 1.
                          Default: [0.5, 0.3, 0.2]
         """

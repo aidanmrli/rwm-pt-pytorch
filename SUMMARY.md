@@ -103,7 +103,9 @@ The codebase follows a modular, interface-based design adhering to SOLID princip
 
 4. **Experimental Framework**: Scripts for systematic studies
    - `experiment_RWM.py`: Comprehensive RWM parameter sweeps
+   - `experiment_RWM_GPU.py`: GPU-accelerated RWM parameter sweeps with enhanced visualizations
    - `experiment_pt.py`: Parallel tempering optimization studies
+   - `experiment_pt_GPU.py`: GPU-accelerated parallel tempering optimization with advanced diagnostics
 
 ## Key Features
 
@@ -180,6 +182,10 @@ simulation.samples_histogram()  # Correctness validation
 # experiment_RWM.py - Comprehensive parameter sweeps
 python experiment_RWM.py --dim 20 --target MultivariateNormal --num_seeds 5
 # Generates: data files, performance plots, optimal parameter identification
+
+# experiment_RWM_GPU.py - GPU-accelerated parameter sweeps
+python experiment_RWM_GPU.py --dim 50 --target ThreeMixture --num_iters 100000
+# Generates: GPU-optimized data collection, traceplots, 2D density visualizations
 ```
 
 ### Parallel Tempering Optimization
@@ -187,6 +193,10 @@ python experiment_RWM.py --dim 20 --target MultivariateNormal --num_seeds 5
 # experiment_pt.py - Temperature ladder optimization
 python experiment_pt.py --dim 30 --target ThreeMixture --swap_accept_max 0.6
 # Generates: adaptive temperature ladders, swap rate analysis
+
+# experiment_pt_GPU.py - GPU-accelerated parallel tempering
+python experiment_pt_GPU.py --dim 50 --target ThreeMixture --swap_accept_max 0.6 --num_iters 100000
+# Generates: ultra-fast multi-chain sampling, advanced diagnostics, optimal swap rate analysis
 ```
 
 ## Technical Highlights

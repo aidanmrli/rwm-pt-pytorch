@@ -56,13 +56,25 @@ class MCMCSimulation_GPU:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
         if hasattr(algorithm, '__name__') and 'GPU' in algorithm.__name__:
-            self.algorithm = algorithm(
-                dim, sigma, target_dist, symmetric, 
-                device=device, 
-                pre_allocate_steps=num_iterations if pre_allocate else None,
-                beta=beta_ladder[0] if beta_ladder else 1.0,
-                burn_in=burn_in
-            )
+            # Check if this is a parallel tempering algorithm
+            if 'ParallelTempering' in algorithm.__name__:
+                self.algorithm = algorithm(
+                    dim, sigma, target_dist, symmetric, 
+                    device=device, 
+                    pre_allocate_steps=num_iterations if pre_allocate else None,
+                    beta_ladder=beta_ladder,
+                    swap_acceptance_rate=swap_acceptance_rate,
+                    burn_in=burn_in
+                )
+            else:
+                # Regular GPU RWM algorithm
+                self.algorithm = algorithm(
+                    dim, sigma, target_dist, symmetric, 
+                    device=device, 
+                    pre_allocate_steps=num_iterations if pre_allocate else None,
+                    beta=beta_ladder[0] if beta_ladder else 1.0,
+                    burn_in=burn_in
+                )
         else:
             # Standard algorithm
             self.algorithm = algorithm(
@@ -111,16 +123,29 @@ class MCMCSimulation_GPU:
         
         start_time = time.time()
         
-        if progress_bar:
-            with tqdm.tqdm(total=self.num_iterations, desc="Running MCMC", unit="iteration") as pbar:
+        # Check if this is a GPU parallel tempering algorithm with its own generate_samples method
+        if hasattr(self.algorithm, 'generate_samples') and 'ParallelTempering' in self.algorithm.__class__.__name__:
+            # Use the algorithm's own optimized generate_samples method
+            print(f"Using optimized GPU parallel tempering generate_samples method")
+            chain = self.algorithm.generate_samples(self.num_iterations)
+            # Convert to list format for compatibility
+            if hasattr(chain, 'cpu'):
+                chain = chain.cpu().numpy().tolist()
+            elif isinstance(chain, torch.Tensor):
+                chain = chain.tolist()
+        else:
+            # Use step-by-step interface for other algorithms
+            if progress_bar:
+                with tqdm.tqdm(total=self.num_iterations, desc="Running MCMC", unit="iteration") as pbar:
+                    for i in range(self.num_iterations + self.burn_in):
+                        self.algorithm.step()
+                        pbar.update(1)
+            else:
                 for i in range(self.num_iterations + self.burn_in):
                     self.algorithm.step()
-                    pbar.update(1)
-        else:
-            for i in range(self.num_iterations + self.burn_in):
-                self.algorithm.step()
-                
-        chain = self.algorithm.chain
+                    
+            chain = self.algorithm.chain
+        
         end_time = time.time()
         elapsed_time = end_time - start_time
         
