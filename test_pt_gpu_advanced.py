@@ -10,13 +10,21 @@ import time
 import matplotlib.pyplot as plt
 from algorithms.pt_rwm_gpu_optimized import ParallelTemperingRWM_GPU_Optimized
 from algorithms.rwm_gpu_optimized import RandomWalkMH_GPU_Optimized
-from target_distributions import MultivariateNormalTorch, ThreeMixtureTorch
+from target_distributions import MultivariateNormalTorch, ThreeMixtureDistributionTorch
 
 def test_multimodal_sampling():
     """Test GPU PT on challenging multimodal distribution."""
     print("="*70)
     print("TESTING GPU PARALLEL TEMPERING ON MULTIMODAL DISTRIBUTION")
     print("="*70)
+    
+    # Set device explicitly
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        print(f"Using GPU: {torch.cuda.get_device_name()}")
+    else:
+        device = torch.device('cpu')
+        print("CUDA not available. Running on CPU (performance will be limited).")
     
     # Setup parameters for challenging multimodal distribution
     dim = 10
@@ -25,11 +33,18 @@ def test_multimodal_sampling():
     burn_in = 1000
     
     # Create three-component mixture distribution (challenging for MCMC)
-    target_dist = ThreeMixtureTorch(dim=dim, separation=4.0)
+    # For separation=4.0, create mode centers at [-4, 0, ..., 0], [0, 0, ..., 0], [4, 0, ..., 0]
+    mode_centers = [
+        [-4.0] + [0.0] * (dim - 1),  # (-4, 0, ..., 0)
+        [0.0] * dim,                  # (0, 0, ..., 0)
+        [4.0] + [0.0] * (dim - 1)    # (4, 0, ..., 0)
+    ]
+    target_dist = ThreeMixtureDistributionTorch(dim=dim, mode_centers=mode_centers, device=device)
     
     print(f"Target distribution: {target_dist.get_name()}")
     print(f"Dimension: {dim}")
     print(f"Components separated by: 4.0 standard deviations")
+    print(f"Device: {device}")
     
     # Test GPU Parallel Tempering
     print(f"\n--- GPU Parallel Tempering ---")
@@ -40,7 +55,8 @@ def test_multimodal_sampling():
         burn_in=burn_in,
         pre_allocate_steps=num_samples,
         swap_every=15,
-        geom_temp_spacing=True
+        geom_temp_spacing=True,
+        device=device
     )
     
     print(f"Number of chains: {pt_gpu.num_chains}")
@@ -53,6 +69,7 @@ def test_multimodal_sampling():
     print(f"PT GPU completed in: {pt_time:.3f} seconds")
     print(f"PT GPU rate: {num_samples / pt_time:.1f} samples/sec")
     print(f"PT swap acceptance rate: {pt_gpu.swap_acceptance_rate:.3f}")
+    print(f"PT samples device: {pt_samples.device}")
     
     # Test standard GPU RWM for comparison
     print(f"\n--- Standard GPU RWM (for comparison) ---")
@@ -61,7 +78,8 @@ def test_multimodal_sampling():
         var=var,
         target_dist=target_dist,
         burn_in=burn_in,
-        pre_allocate_steps=num_samples
+        pre_allocate_steps=num_samples,
+        device=device
     )
     
     start_time = time.time()
@@ -71,6 +89,7 @@ def test_multimodal_sampling():
     print(f"RWM GPU completed in: {rwm_time:.3f} seconds")
     print(f"RWM GPU rate: {num_samples / rwm_time:.1f} samples/sec")
     print(f"RWM acceptance rate: {rwm_gpu.acceptance_rate:.3f}")
+    print(f"RWM samples device: {rwm_samples.device}")
     
     # Compare mixing and exploration
     print(f"\n--- Mixing Quality Comparison ---")
@@ -103,6 +122,14 @@ def test_scaling_performance():
     print("TESTING GPU PARALLEL TEMPERING SCALING PERFORMANCE")
     print("="*70)
     
+    # Set device explicitly
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        print(f"Using GPU: {torch.cuda.get_device_name()}")
+    else:
+        device = torch.device('cpu')
+        print("CUDA not available. Running on CPU (performance will be limited).")
+    
     dimensions = [5, 10, 20, 50]
     num_samples = 2000
     burn_in = 500
@@ -113,10 +140,10 @@ def test_scaling_performance():
     for dim in dimensions:
         print(f"\n--- Testing dimension: {dim} ---")
         
-        # Create target distribution
-        target_dist = MultivariateNormalTorch(dim)
+        # Create target distribution with explicit device
+        target_dist = MultivariateNormalTorch(dim, device=device)
         
-        # Initialize PT GPU
+        # Initialize PT GPU with explicit device
         pt_gpu = ParallelTemperingRWM_GPU_Optimized(
             dim=dim,
             var=var,
@@ -124,7 +151,8 @@ def test_scaling_performance():
             burn_in=burn_in,
             pre_allocate_steps=num_samples,
             swap_every=20,
-            geom_temp_spacing=True
+            geom_temp_spacing=True,
+            device=device
         )
         
         # Time sample generation
@@ -141,13 +169,15 @@ def test_scaling_performance():
             'rate': rate,
             'num_chains': pt_gpu.num_chains,
             'memory_mb': memory_mb,
-            'swap_acceptance': pt_gpu.swap_acceptance_rate
+            'swap_acceptance': pt_gpu.swap_acceptance_rate,
+            'device': str(device)
         }
         results.append(result)
         
         print(f"Time: {generation_time:.3f}s, Rate: {rate:.1f} samples/sec")
         print(f"Chains: {pt_gpu.num_chains}, Memory: {memory_mb:.1f} MB")
         print(f"Swap acceptance: {pt_gpu.swap_acceptance_rate:.3f}")
+        print(f"Device: {device}")
     
     # Display scaling summary
     print(f"\n--- Scaling Summary ---")
@@ -164,13 +194,29 @@ def test_temperature_ladder_optimization():
     print("TESTING TEMPERATURE LADDER OPTIMIZATION")
     print("="*70)
     
+    # Set device explicitly
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        print(f"Using GPU: {torch.cuda.get_device_name()}")
+    else:
+        device = torch.device('cpu')
+        print("CUDA not available. Running on CPU (performance will be limited).")
+    
     dim = 15
     var = 0.6
     num_samples = 3000
     burn_in = 500
     
-    # Create challenging target distribution
-    target_dist = ThreeMixtureTorch(dim=dim, separation=3.0)
+    # Create challenging target distribution with explicit device
+    # For separation=3.0, create mode centers at [-3, 0, ..., 0], [0, 0, ..., 0], [3, 0, ..., 0]
+    mode_centers = [
+        [-3.0] + [0.0] * (dim - 1),  # (-3, 0, ..., 0)
+        [0.0] * dim,                  # (0, 0, ..., 0)
+        [3.0] + [0.0] * (dim - 1)    # (3, 0, ..., 0)
+    ]
+    target_dist = ThreeMixtureDistributionTorch(dim=dim, mode_centers=mode_centers, device=device)
+    
+    print(f"Device: {device}")
     
     # Test different ladder configurations
     ladder_configs = [
@@ -188,13 +234,13 @@ def test_temperature_ladder_optimization():
             pt_gpu = ParallelTemperingRWM_GPU_Optimized(
                 dim=dim, var=var, target_dist=target_dist,
                 burn_in=burn_in, pre_allocate_steps=num_samples,
-                geom_temp_spacing=True, swap_every=20
+                geom_temp_spacing=True, swap_every=20, device=device
             )
         else:
             pt_gpu = ParallelTemperingRWM_GPU_Optimized(
                 dim=dim, var=var, target_dist=target_dist,
                 burn_in=burn_in, pre_allocate_steps=num_samples,
-                beta_ladder=config['betas'], swap_every=20
+                beta_ladder=config['betas'], swap_every=20, device=device
             )
         
         print(f"Beta ladder: {[f'{b:.3f}' for b in pt_gpu.beta_ladder]}")
@@ -213,12 +259,14 @@ def test_temperature_ladder_optimization():
             'time': generation_time,
             'esjd': esjd,
             'swap_acceptance': swap_acc,
-            'rate': num_samples / generation_time
+            'rate': num_samples / generation_time,
+            'device': str(device)
         }
         results.append(result)
         
         print(f"Time: {generation_time:.3f}s, ESJD: {esjd:.6f}")
         print(f"Swap acceptance: {swap_acc:.3f}, Rate: {result['rate']:.1f} samples/sec")
+        print(f"Sample device: {samples.device}")
     
     # Find best configuration
     best_config = max(results, key=lambda x: x['esjd'])
@@ -232,12 +280,6 @@ def test_temperature_ladder_optimization():
 
 def main():
     """Run all advanced tests."""
-    if not torch.cuda.is_available():
-        print("CUDA not available. Some tests may be slow on CPU.")
-    else:
-        print(f"Using GPU: {torch.cuda.get_device_name()}")
-        print(f"CUDA Memory Available: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
-    
     try:
         # Test 1: Multimodal sampling comparison
         pt_samples, rwm_samples, pt_gpu, rwm_gpu = test_multimodal_sampling()

@@ -15,18 +15,26 @@ def test_pt_gpu_basic():
     print("TESTING GPU PARALLEL TEMPERING - BASIC FUNCTIONALITY")
     print("="*60)
     
+    # Set device explicitly
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        print(f"Using GPU: {torch.cuda.get_device_name()}")
+    else:
+        device = torch.device('cpu')
+        print("CUDA not available. Running on CPU (performance will be limited).")
+    
     # Setup parameters
     dim = 5
     var = 0.5
     num_samples = 1000
     burn_in = 100
     
-    # Create a simple target distribution
-    target_mean = torch.zeros(dim)
-    target_cov = torch.eye(dim)
-    target_dist = MultivariateNormalTorch(dim, mean=target_mean, cov=target_cov)
+    # Create target distribution tensors on the correct device
+    target_mean = torch.zeros(dim, device=device)
+    target_cov = torch.eye(dim, device=device)
+    target_dist = MultivariateNormalTorch(dim, mean=target_mean, cov=target_cov, device=device)
     
-    # Initialize PT-RWM GPU
+    # Initialize PT-RWM GPU with explicit device
     pt_gpu = ParallelTemperingRWM_GPU_Optimized(
         dim=dim,
         var=var,
@@ -34,13 +42,15 @@ def test_pt_gpu_basic():
         burn_in=burn_in,
         pre_allocate_steps=num_samples,
         swap_every=10,
-        geom_temp_spacing=True
+        geom_temp_spacing=True,
+        device=device
     )
     
     print(f"Target distribution: {target_dist.get_name()}")
     print(f"Dimension: {dim}")
     print(f"Number of chains: {pt_gpu.num_chains}")
     print(f"Beta ladder: {pt_gpu.beta_ladder}")
+    print(f"Device: {device}")
     
     # Generate samples
     print(f"\nGenerating {num_samples} samples with {burn_in} burn-in...")
@@ -52,9 +62,10 @@ def test_pt_gpu_basic():
     
     print(f"Generation completed in {end_time - start_time:.3f} seconds")
     print(f"Sample shape: {samples.shape}")
+    print(f"Sample device: {samples.device}")
     print(f"Samples per second: {num_samples / (end_time - start_time):.1f}")
     
-    # Check basic properties
+    # Check basic properties (ensure target tensors are on same device for comparison)
     sample_mean = torch.mean(samples, dim=0)
     sample_cov = torch.cov(samples.T)
     
@@ -90,11 +101,6 @@ def test_pt_gpu_vs_cpu_comparison():
 
 def main():
     """Run all tests."""
-    if not torch.cuda.is_available():
-        print("CUDA not available. Running on CPU (performance will be limited).")
-    else:
-        print(f"Using GPU: {torch.cuda.get_device_name()}")
-    
     try:
         # Test basic functionality
         test_pt_gpu_basic()
