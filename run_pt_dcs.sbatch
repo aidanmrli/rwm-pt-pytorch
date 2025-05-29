@@ -29,11 +29,11 @@ mkdir -p logs
 # ThreeMixture, ThreeMixtureScaled, 
 # IIDGamma, IIDBeta, Hypercube
 # FullRosenbrock, EvenRosenbrock, HybridRosenbrock
-TARGET_DISTRIBUTION="MultivariateNormal"
+TARGET_DISTRIBUTION="ThreeMixture"
 
 python experiment_pt_GPU.py \
     --target $TARGET_DISTRIBUTION \
-    --dim 20 \
+    --dim 30 \
     --num_iters 200000 \
     --swap_accept_max 0.5 \
     --burn_in 1000 \
