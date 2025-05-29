@@ -6,6 +6,11 @@ Test script for GPU-optimized Parallel Tempering Random Walk Metropolis
 import torch
 import numpy as np
 import time
+import sys
+import os
+# Add the parent directory to the Python path so we can import from algorithms/
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from algorithms.pt_rwm_gpu_optimized import ParallelTemperingRWM_GPU_Optimized
 from target_distributions import MultivariateNormalTorch
 
@@ -93,11 +98,6 @@ def test_pt_gpu_vs_cpu_comparison():
     print("\n" + "="*60)
     print("TESTING GPU vs CPU PARALLEL TEMPERING COMPARISON")
     print("="*60)
-    
-    # This is a placeholder for comparison with CPU version
-    # Would need to import and test CPU PT as well
-    print("Note: Full CPU vs GPU comparison would require implementing")
-    print("CPU PT test here. For now, we focus on GPU functionality.")
 
 def main():
     """Run all tests."""

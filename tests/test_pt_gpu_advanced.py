@@ -8,6 +8,12 @@ import torch
 import numpy as np
 import time
 import matplotlib.pyplot as plt
+
+import sys
+import os
+# Add the parent directory to the Python path so we can import from algorithms/
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from algorithms.pt_rwm_gpu_optimized import ParallelTemperingRWM_GPU_Optimized
 from algorithms.rwm_gpu_optimized import RandomWalkMH_GPU_Optimized
 from target_distributions import MultivariateNormalTorch, ThreeMixtureDistributionTorch
