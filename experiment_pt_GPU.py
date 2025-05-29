@@ -31,22 +31,22 @@ def get_target_distribution(name, dim, use_torch=True, device=None, **kwargs):
             return MultivariateNormalTorch(dim, device=device)
         elif name == "RoughCarpet":
             # Custom mode centers and weights for better separation
-            mode_centers = kwargs.get('mode_centers', [-4.0, 0.0, 4.0]) 
+            mode_centers = kwargs.get('mode_centers', [-15.0, 0.0, 15.0]) 
             mode_weights = kwargs.get('mode_weights', [0.5, 0.3, 0.2])   
             return RoughCarpetDistributionTorch(dim, scaling=False, device=device, 
                                               mode_centers=mode_centers, mode_weights=mode_weights)
         elif name == "RoughCarpetScaled":
             # Custom mode centers and weights for better separation
-            mode_centers = kwargs.get('mode_centers', [-4.0, 0.0, 4.0])
+            mode_centers = kwargs.get('mode_centers', [-15.0, 0.0, 15.0])
             mode_weights = kwargs.get('mode_weights', [0.5, 0.3, 0.2])   
             return RoughCarpetDistributionTorch(dim, scaling=True, device=device,
                                               mode_centers=mode_centers, mode_weights=mode_weights)
         elif name == "ThreeMixture":
             # Custom mode centers for better separation (4.0 units between adjacent modes)
             mode_centers = kwargs.get('mode_centers', [
-                [-5.0] + [0.0] * (dim - 1),  # (-4, 0, ..., 0)
+                [-15.0] + [0.0] * (dim - 1),  # (-4, 0, ..., 0)
                 [0.0] * dim,                  # (0, 0, ..., 0)
-                [5.0] + [0.0] * (dim - 1)    # (4, 0, ..., 0)
+                [15.0] + [0.0] * (dim - 1)    # (4, 0, ..., 0)
             ])
             mode_weights = kwargs.get('mode_weights', [1/3, 1/3, 1/3])
             return ThreeMixtureDistributionTorch(dim, scaling=False, device=device,
@@ -54,9 +54,9 @@ def get_target_distribution(name, dim, use_torch=True, device=None, **kwargs):
         elif name == "ThreeMixtureScaled":
             # Custom mode centers for better separation (4.0 units between adjacent modes)
             mode_centers = kwargs.get('mode_centers', [
-                [-5.0] + [0.0] * (dim - 1),  # (-4, 0, ..., 0)
+                [-15.0] + [0.0] * (dim - 1),  # (-4, 0, ..., 0)
                 [0.0] * dim,                  # (0, 0, ..., 0)
-                [5.0] + [0.0] * (dim - 1)    # (4, 0, ..., 0)
+                [15.0] + [0.0] * (dim - 1)    # (4, 0, ..., 0)
             ])
             mode_weights = kwargs.get('mode_weights', [1/3, 1/3, 1/3])  
             return ThreeMixtureDistributionTorch(dim, scaling=True, device=device,
@@ -160,8 +160,8 @@ def get_target_distribution(name, dim, use_torch=True, device=None, **kwargs):
         else:
             raise ValueError("Unknown target distribution name")
 
-def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, seed=42, burn_in=1000, **kwargs):
-    """Run many simulations with different variance values, then save and plot the progression of ESJD and acceptance rate."""
+def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max=0.5, seed=42, burn_in=1000, **kwargs):
+    """Run many parallel tempering simulations with different swap acceptance rates, then save and plot the progression of ESJD and acceptance rate."""
     
     # Set device explicitly
     if torch.cuda.is_available():
@@ -193,55 +193,65 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         print(f"{'='*60}")
     
     target_distribution = get_target_distribution(target_name, dim, use_torch=True, device=device, **kwargs)
-    var_value_range = np.linspace(0.01, var_max, 40)
+    swap_acceptance_rates_range = np.linspace(0.01, swap_accept_max, 30)
     
     acceptance_rates = []
     expected_squared_jump_distances = []
     times = []
     
-    print(f"\nRunning simulations with {len(var_value_range)} variance values...")
+    print(f"\nRunning parallel tempering simulations with {len(swap_acceptance_rates_range)} swap acceptance rate values...")
     
     total_start = time.time()
+    constructed_beta_ladder = None
     
     # Use tqdm for progress bar
-    for i, var in enumerate(tqdm.tqdm(var_value_range, desc="Running RWM with current variance =", unit="config")):
-        proposal_variance = (var ** 2) / (actual_dim ** (1))
+    for i, target_swap_rate in enumerate(tqdm.tqdm(swap_acceptance_rates_range, desc="Running PT with target swap rate =", unit="config")):
+        # Use standard PT scaling: sigma = (2.38**2) / dim
+        proposal_variance = ((2.38 ** 2) / (actual_dim ** (1)))
         iteration_start = time.time()
         
         simulation = MCMCSimulation_GPU(
             dim=actual_dim,
             sigma=proposal_variance,
             num_iterations=num_iters,
-            algorithm=RandomWalkMH_GPU_Optimized,
+            algorithm=ParallelTemperingRWM_GPU_Optimized,
             target_dist=target_distribution,
             symmetric=True,
             pre_allocate=True,
             seed=seed,
             burn_in=burn_in,
-            device=device
+            device=device,
+            beta_ladder=constructed_beta_ladder,
+            swap_acceptance_rate=target_swap_rate,
+            iterative_temp_spacing=True  # Use iterative ladder construction as default
         )
+        
+        # Get the constructed beta ladder from the first simulation to reuse
+        if constructed_beta_ladder is None:
+            constructed_beta_ladder = simulation.algorithm.beta_ladder
         
         chain = simulation.generate_samples(progress_bar=False)
         
         iteration_time = time.time() - iteration_start
         times.append(iteration_time)
         
-        acceptance_rates.append(simulation.acceptance_rate())
-        expected_squared_jump_distances.append(simulation.expected_squared_jump_distance())
+        acceptance_rates.append(simulation.algorithm.swap_acceptance_rate)
+        expected_squared_jump_distances.append(simulation.pt_expected_squared_jump_distance())
     
     total_time = time.time() - total_start
     
     max_esjd = max(expected_squared_jump_distances)
     max_esjd_index = np.argmax(expected_squared_jump_distances)
-    max_acceptance_rate = acceptance_rates[max_esjd_index]
-    max_variance_value = var_value_range[max_esjd_index]
+    max_actual_acceptance_rate = acceptance_rates[max_esjd_index]
+    max_constr_acceptance_rate = swap_acceptance_rates_range[max_esjd_index]
     
     print(f"\nFinal Results:")
     print(f"   Total time: {total_time:.1f} seconds")
     print(f"   Average time per configuration: {np.mean(times):.1f} seconds")
     print(f"   Maximum ESJD: {max_esjd:.6f}")
-    print(f"   Optimal acceptance rate: {max_acceptance_rate:.3f}")
-    print(f"   Optimal variance value: {max_variance_value:.6f}")
+    print(f"   (Actual) Swap acceptance rate corresponding to maximum ESJD: {max_actual_acceptance_rate:.3f}")
+    print(f"   (Construction) Swap acceptance rate value corresponding to maximum ESJD: {max_constr_acceptance_rate:.3f}")
+    print(f"   Beta ladder used: {[f'{b:.3f}' for b in constructed_beta_ladder]}")
     
     # Save results
     data = {
@@ -251,36 +261,38 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         'seed': seed,
         'total_time': total_time,
         'max_esjd': max_esjd,
-        'max_acceptance_rate': max_acceptance_rate,
-        'max_variance_value': max_variance_value,
+        'max_actual_acceptance_rate': max_actual_acceptance_rate,
+        'max_constr_acceptance_rate': max_constr_acceptance_rate,
         'expected_squared_jump_distances': expected_squared_jump_distances,
         'acceptance_rates': acceptance_rates,
-        'var_value_range': var_value_range.tolist(),
-        'times': times
+        'swap_acceptance_rates_range': swap_acceptance_rates_range.tolist(),
+        'times': times,
+        'beta_ladder': constructed_beta_ladder
     }
     
-    filename = f"data/{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.json"
+    filename = f"data/{target_name}_PT_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.json"
     with open(filename, "w") as file:
         json.dump(data, file, indent=2)
     print(f"   Results saved to: {filename}")
     
-    # Create traceplot using optimal variance
-    print(f"\nGenerating traceplot with optimal variance ({max_variance_value:.6f})...")
-    optimal_proposal_variance = (max_variance_value ** 2) / (actual_dim ** (1))
+    # Create traceplot using optimal swap acceptance rate
+    print(f"\nGenerating traceplot with optimal swap acceptance rate ({max_constr_acceptance_rate:.6f})...")
     
-    # Run one more simulation with optimal variance to get chain for traceplot
+    # Run one more simulation with optimal swap acceptance rate to get chain for traceplot
     traceplot_simulation = MCMCSimulation_GPU(
         dim=actual_dim,
-        sigma=optimal_proposal_variance,
+        sigma=proposal_variance,
         num_iterations=num_iters,
-        algorithm=RandomWalkMH_GPU_Optimized,
+        algorithm=ParallelTemperingRWM_GPU_Optimized,
         target_dist=target_distribution,
         symmetric=True,
         pre_allocate=True,
         seed=seed,
-        burn_in=burn_in
-        burn_in=1000,
-        device=device
+        burn_in=burn_in,
+        device=device,
+        beta_ladder=constructed_beta_ladder,
+        swap_acceptance_rate=max_constr_acceptance_rate,
+        iterative_temp_spacing=True  # Use iterative ladder construction as default
     )
     
     traceplot_chain = traceplot_simulation.generate_samples(progress_bar=False)
@@ -288,14 +300,14 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     # Create traceplot figure
     plt.figure(figsize=(12, 8))
     
-    # Get chain data - use GPU tensor if available for efficiency
-    if hasattr(traceplot_simulation.algorithm, 'get_chain_gpu'):
-        chain_data = traceplot_simulation.algorithm.get_chain_gpu().cpu().numpy()
+    # Get chain data - use GPU tensor if available for efficiency (cold chain only)
+    if hasattr(traceplot_simulation.algorithm, 'get_cold_chain_gpu'):
+        chain_data = traceplot_simulation.algorithm.get_cold_chain_gpu().cpu().numpy()
     else:
         chain_data = np.array(traceplot_simulation.algorithm.chain)
     
-    # Apply burn-in (skip first 1000 samples for visualization)
-    burn_in_samples = burn_in  # Use 10% or 1000, whichever is smaller
+    # Apply burn-in (skip first burn_in samples for visualization)
+    burn_in_samples = burn_in
     if len(chain_data) > burn_in_samples:
         chain_data = chain_data[burn_in_samples:]
     
@@ -307,7 +319,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         plt.plot(chain_data[:, 0], alpha=0.7, linewidth=0.5, color='blue')
         plt.xlabel('Iteration')
         plt.ylabel('Value')
-        plt.title(f'Traceplot - {target_name} (Dimension 1)\nOptimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+        plt.title(f'Traceplot - {target_name} (Dimension 1)\nOptimal swap rate: {max_constr_acceptance_rate:.6f}, Actual swap rate: {max_actual_acceptance_rate:.3f}')
         plt.grid(True, alpha=0.3)
     else:
         # Multiple dimensions subplot
@@ -318,7 +330,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
             plt.grid(True, alpha=0.3)
             
             if i == 0:
-                plt.title(f'Traceplot - {target_name} (First {num_dims_to_plot} dimensions)\nOptimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+                plt.title(f'Traceplot - {target_name} (First {num_dims_to_plot} dimensions)\nOptimal swap rate: {max_constr_acceptance_rate:.6f}, Actual swap rate: {max_actual_acceptance_rate:.3f}')
             if i == num_dims_to_plot - 1:
                 plt.xlabel('Iteration')
     
@@ -328,7 +340,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     os.makedirs("images", exist_ok=True)
     
     # Save traceplot
-    output_filename = f"images/traceplot_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
+    output_filename = f"images/traceplot_{target_name}_PT_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
     plt.savefig(output_filename, dpi=300, bbox_inches='tight')
     plt.clf()
     plt.close()
@@ -421,36 +433,65 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
             x_traj = x_chain
             y_traj = y_chain
         
-        # Plot trajectory as very thin line with smaller, less frequent dots
-        # plt.plot(x_traj, y_traj, 'r-', alpha=0.4, linewidth=0.3, label='MCMC Trajectory')
+        # Plot trajectory as scattered points
         plt.scatter(x_traj[::max(1, len(x_traj)//200)], y_traj[::max(1, len(y_traj)//200)], 
                    c='red', s=3, alpha=0.6, zorder=5, label='MCMC Samples')
         
         plt.xlabel('Dimension 1')
         plt.ylabel('Dimension 2')
         plt.title(f'2D Target Density with MCMC Samples - {target_name}\n'
-                 f'Optimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
-        # plt.legend()
+                 f'Optimal swap rate: {max_constr_acceptance_rate:.6f}, Actual swap rate: {max_actual_acceptance_rate:.3f}')
         plt.grid(True, alpha=0.3)
         
         # Save 2D visualization
-        density_filename = f"images/density2D_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
+        density_filename = f"images/density2D_{target_name}_PT_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
         plt.savefig(density_filename, dpi=300, bbox_inches='tight')
         plt.clf()
         plt.close()
         print(f"   2D density visualization created and saved as '{density_filename}'")
 
+    # Create ESJD plots
+    plt.figure(figsize=(12, 5))
+    
+    # Plot 1: ESJD vs Construction Swap Acceptance Rate
+    plt.subplot(1, 2, 1)
+    plt.plot(swap_acceptance_rates_range, expected_squared_jump_distances, marker='x')
+    plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
+    plt.xlabel('Swap Acceptance Rate (Construction)')
+    plt.ylabel('ESJD')
+    plt.title(f'ESJD vs Swap Acceptance Rate (dim={actual_dim})')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 2: ESJD vs Actual Swap Acceptance Rate
+    plt.subplot(1, 2, 2)
+    plt.plot(acceptance_rates, expected_squared_jump_distances, marker='x')   
+    plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
+    plt.xlabel('Swap Acceptance Rate (Actual)')
+    plt.ylabel('ESJD')
+    plt.title(f'ESJD vs Swap Acceptance Rate (dim={actual_dim})')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    # Save ESJD plots
+    esjd_filename = f"images/ESJD_vs_SwapRate_{target_name}_PT_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
+    plt.savefig(esjd_filename, dpi=300, bbox_inches='tight')
+    plt.clf()
+    plt.close()
+    print(f"   ESJD plots created and saved as '{esjd_filename}'")
+
     return data
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="GPU-accelerated RWM simulations")
+    parser = argparse.ArgumentParser(description="GPU-accelerated Parallel Tempering simulations")
     parser.add_argument("--dim", type=int, default=20, help="Dimension of the target distribution")
-    parser.add_argument("--target", type=str, default="MultivariateNormal", help="Target distribution")
-    parser.add_argument("--num_iters", type=int, default=100000, help="Number of iterations")
-    parser.add_argument("--var_max", type=float, default=3.5, help="Maximum variance value")
+    parser.add_argument("--target", type=str, default="ThreeMixture", help="Target distribution")
+    parser.add_argument("--num_iters", type=int, default=200000, help="Number of iterations")
+    parser.add_argument("--swap_accept_max", type=float, default=0.5, help="Maximum swap acceptance rate value")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
-    parser.add_argument("--burn_in", type=int, default=1000, help="Burn-in period")
-    
+    parser.add_argument("--burn_in", type=int, default=1000, help="Number of burn-in samples")
     parser.add_argument("--hybrid_rosenbrock_n1", type=int, default=3, help="Block length parameter for HybridRosenbrock")
     parser.add_argument("--hybrid_rosenbrock_n2", type=int, default=5, help="Number of blocks/rows for HybridRosenbrock")
     
@@ -469,7 +510,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if torch.cuda.is_available():
-        print(f" GPU detected: {torch.cuda.get_device_name()}")
+        print(f"🚀 GPU detected: {torch.cuda.get_device_name()}")
         print(f"   CUDA version: {torch.version.cuda}")
         print(f"   GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
     else:
@@ -490,6 +531,5 @@ if __name__ == "__main__":
         kwargs['prior_hypermean_std'] = args.super_funnel_prior_hypermean_std
         kwargs['prior_tau_scale'] = args.super_funnel_prior_tau_scale
     
-    results = run_study(args.dim, args.target, args.num_iters, args.var_max, args.seed, args.burn_in, **kwargs)
-
-    print(f"Finished running experiment.") 
+    results = run_study(args.dim, args.target, args.num_iters, args.swap_accept_max, args.seed, args.burn_in, **kwargs)
+    print(f"🎉 Finished running GPU-accelerated parallel tempering experiment.") 

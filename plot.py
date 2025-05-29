@@ -33,7 +33,7 @@ def create_plot(data, filename):
             marker='x')
 
     plt.axvline(x=0.234, color='red', linestyle=':', label='a = 0.234')
-    # plt.axvline(x=0.135, color='purple', linestyle=':', label='a = 0.135')
+    plt.axvline(x=0.135, color='purple', linestyle=':', label='a = 0.135')
     plt.xlabel('acceptance rate')
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs acceptance rate (dim={dim})')

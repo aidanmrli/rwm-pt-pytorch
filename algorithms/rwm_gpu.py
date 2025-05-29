@@ -1,3 +1,6 @@
+# This is the original RWM_GPU implementation.
+# It is not optimized for performance.
+# It is here for reference.
 import torch
 import torch.nn as nn
 import numpy as np
