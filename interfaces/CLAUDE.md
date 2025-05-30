@@ -199,6 +199,14 @@ The interfaces establish a modular architecture where:
 - Support for both standard and GPU-accelerated algorithms
 - Burn-in handling throughout all computations
 
+This is the primary class for running MCMC simulations with GPU acceleration. Key aspects:
+
+*   **Initialization (`__init__`)**: Takes parameters like `dim`, `proposal_config` (a dictionary specifying the proposal distribution type and its parameters), `num_iterations`, the `algorithm` class (e.g., `RandomWalkMH_GPU_Optimized`), `target_dist`, etc.
+    *   It correctly instantiates the specified MCMC algorithm (e.g., `RandomWalkMH_GPU_Optimized`).
+    *   Crucially, it uses the `proposal_config` to create the appropriate proposal distribution object (e.g., `NormalProposal`, `LaplaceProposal` from the `proposal_distributions` package) via its internal `_create_proposal_distribution` method. This proposal object is then passed to the MCMC algorithm.
+*   **Proposal Handling**: The `_create_proposal_distribution` method is responsible for parsing `proposal_config` and instantiating the correct proposal distribution class from the `proposal_distributions` package (e.g., `NormalProposal`, `LaplaceProposal`, `UniformRadiusProposal`). It imports these classes from `proposal_distributions`.
+*   The `interfaces/proposals.py` file has been **removed**. The `ProposalDistribution` base class is now located in `proposal_distributions/base.py`, and concrete implementations are in the `proposal_distributions` directory.
+
 ## Architecture Benefits
 
 This interface-based design enables:

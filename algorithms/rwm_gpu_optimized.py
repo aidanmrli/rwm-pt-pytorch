@@ -4,6 +4,7 @@ import numpy as np
 import time
 from interfaces import MHAlgorithm, TargetDistribution, TorchTargetDistribution
 import warnings
+from proposal_distributions import ProposalDistribution, NormalProposal, LaplaceProposal, UniformRadiusProposal
 
 @torch.jit.script
 def ultra_fused_mcmc_step_basic(current_state: torch.Tensor,
@@ -85,9 +86,11 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
     - Optimized random number generation
     - Mixed precision support
     - Fused operations to reduce kernel launch overhead
+    - Flexible proposal distributions (Normal, Laplace, UniformRadius)
     """
     
-    def __init__(self, dim: int, var: float, 
+    def __init__(self, dim: int, 
+                 var: float = None,  # Keep backward compatibility as 2nd positional arg
                  target_dist: TorchTargetDistribution | TargetDistribution = None, 
                  symmetric: bool = True, 
                  beta: float = 1.0,
@@ -96,12 +99,13 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
                  pre_allocate_steps: int = None, 
                  use_efficient_rng: bool = True,
                  compile_mode: str = None,
+                 proposal_distribution: ProposalDistribution = None,  # New parameter at end
                  ):
         """Initialize the optimized GPU RandomWalkMH algorithm.
         
         Args:
             dim: Dimension of the target distribution
-            var: Proposal variance
+            var: Proposal variance (backward compatibility - creates NormalProposal)
             target_dist: Target distribution to sample from
             symmetric: Whether proposal distribution is symmetric
             beta: Temperature parameter (inverse)
@@ -110,8 +114,31 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
             pre_allocate_steps: Pre-allocate memory for this many steps
             use_efficient_rng: Use more efficient random number generation
             compile_mode: PyTorch compilation mode ('default', 'max-autotune', etc.) or None to disable
+            proposal_distribution: ProposalDistribution instance for sampling proposals (new system)
         """
-        super().__init__(dim, var, target_dist, symmetric)
+        # Handle backward compatibility and proposal configuration
+        if proposal_distribution is not None:
+            # New proposal system takes precedence
+            super().__init__(dim, 1.0, target_dist, symmetric)  # Pass nominal var=1.0 to parent
+        elif var is not None:
+            # Backward compatibility: create NormalProposal from var
+            super().__init__(dim, var, target_dist, symmetric)
+            if device is None:
+                device_obj = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            else:
+                device_obj = torch.device(device)
+            
+            # Create NormalProposal for backward compatibility
+            proposal_distribution = NormalProposal(
+                dim=dim, 
+                base_variance_scalar=var, 
+                beta=beta,
+                device=device_obj,
+                dtype=torch.float32,
+                rng_generator=None  # Will be set later
+            )
+        else:
+            raise ValueError("Either var (backward compatibility) or proposal_distribution must be provided")
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -129,7 +156,64 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
         self.use_efficient_rng = use_efficient_rng
         self.dtype = torch.float32
         
-        self.name = f"RWM_GPU_FUSED"
+        # Setup RNG generator for efficiency if on CUDA
+        if use_efficient_rng and self.device.type == 'cuda':
+            self.rng_generator = torch.Generator(device=self.device)
+        else:
+            self.rng_generator = None
+        
+        # Update proposal distribution with correct device/dtype/rng_generator
+        if proposal_distribution.device != self.device or proposal_distribution.dtype != self.dtype:
+            # Recreate proposal with correct device/dtype/rng_generator
+            if isinstance(proposal_distribution, NormalProposal):
+                # Extract base variance from existing proposal
+                base_var = float(proposal_distribution.std_dev ** 2 * proposal_distribution.beta)
+                self.proposal_dist = NormalProposal(
+                    dim=dim,
+                    base_variance_scalar=base_var,
+                    beta=beta,
+                    device=self.device,
+                    dtype=self.dtype,
+                    rng_generator=self.rng_generator
+                )
+            elif isinstance(proposal_distribution, LaplaceProposal):
+                # Extract base variance vector
+                base_var_vec = proposal_distribution.scale_vector ** 2 * 2.0 * proposal_distribution.beta
+                self.proposal_dist = LaplaceProposal(
+                    dim=dim,
+                    base_variance_vector=base_var_vec,
+                    beta=beta,
+                    device=self.device,
+                    dtype=self.dtype,
+                    rng_generator=self.rng_generator
+                )
+            elif isinstance(proposal_distribution, UniformRadiusProposal):
+                # Extract base radius
+                base_radius = float(proposal_distribution.effective_radius * torch.sqrt(torch.tensor(proposal_distribution.beta)))
+                self.proposal_dist = UniformRadiusProposal(
+                    dim=dim,
+                    base_radius=base_radius,
+                    beta=beta,
+                    device=self.device,
+                    dtype=self.dtype,
+                    rng_generator=self.rng_generator
+                )
+            else:
+                # Generic proposal - recreate on correct device
+                self.proposal_dist = proposal_distribution
+                # Update device/dtype attributes if possible
+                if hasattr(self.proposal_dist, 'device'):
+                    self.proposal_dist.device = self.device
+                if hasattr(self.proposal_dist, 'dtype'):
+                    self.proposal_dist.dtype = self.dtype
+                if hasattr(self.proposal_dist, 'rng_generator'):
+                    self.proposal_dist.rng_generator = self.rng_generator
+        else:
+            self.proposal_dist = proposal_distribution
+            # Update rng_generator
+            self.proposal_dist.rng_generator = self.rng_generator
+        
+        self.name = f"RWM_GPU_FUSED_{self.proposal_dist.get_name()}"
         
         # Performance tracking
         self.num_acceptances = 0
@@ -157,10 +241,6 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
             self.pre_allocated_chain = None
             self.pre_allocated_log_densities = None
             self.chain_index = None
-            
-        # Convert proposal covariance to GPU with optimal data type
-        proposal_cov = (var / beta) * torch.eye(dim, device=self.device, dtype=torch.float32)
-        self.proposal_cov_chol = torch.linalg.cholesky(proposal_cov).to(self.dtype)
         
         self.current_state = None
         self.log_target_density_current = None
@@ -172,12 +252,6 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
         self.precomputed_increments = None
         self.precomputed_random_vals = None
         self.increment_index = 0
-        
-        # RNG optimization
-        if use_efficient_rng and self.device.type == 'cuda':
-            self.rng_generator = torch.Generator(device=self.device)
-        else:
-            self.rng_generator = None
         
         # Note: Target distribution does not support JIT compilation yet
         self.compiled_log_density = None
@@ -270,12 +344,8 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
             return increment
         else:
             # Fallback to on-demand generation
-            if self.rng_generator is not None:
-                noise = torch.randn(self.dim, device=self.device, dtype=self.dtype, 
-                                  generator=self.rng_generator)
-            else:
-                noise = torch.randn(self.dim, device=self.device, dtype=self.dtype)
-            return torch.matmul(self.proposal_cov_chol, noise)
+            warnings.warn("Generating increment on-demand. Consider pre-computation for optimal performance.")
+            return self.proposal_dist.sample(1).squeeze(0)  # Get single sample (shape [dim])
     
     def _get_next_random(self):
         """Get the next pre-computed random value for acceptance decisions."""
@@ -418,24 +488,26 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
     
     def _precompute_all_randoms(self, total_steps):
         """Pre-compute all random numbers for optimal GPU memory usage."""
-        print(f"Pre-computing {total_steps} random increments and values...")
+        print(f"Pre-computing {total_steps} random increments using {self.proposal_dist.get_name()}...")
         
-        # Pre-compute increments
+        # Use proposal distribution for efficient batch generation
+        self.precomputed_increments = self.proposal_dist.sample(total_steps)
+        
+        # Pre-compute random values for acceptance decisions (Uniform[0,1])
         if self.rng_generator is not None:
-            raw_increments = torch.randn(total_steps, self.dim, device=self.device, 
-                                       dtype=self.dtype, generator=self.rng_generator)
             self.precomputed_random_vals = torch.rand(total_steps, device=self.device, 
-                                                    generator=self.rng_generator)
+                                                    dtype=torch.float32, generator=self.rng_generator)
         else:
-            raw_increments = torch.randn(total_steps, self.dim, device=self.device, dtype=self.dtype)
-            self.precomputed_random_vals = torch.rand(total_steps, device=self.device)
+            self.precomputed_random_vals = torch.rand(total_steps, device=self.device, 
+                                                    dtype=torch.float32)
         
-        # Apply covariance structure efficiently
-        self.precomputed_increments = torch.matmul(raw_increments, self.proposal_cov_chol.T)
         self.increment_index = 0
         
-        memory_mb = (self.precomputed_increments.numel() + self.precomputed_random_vals.numel()) * 4 / 1e6
-        print(f"Random numbers pre-computed. Memory: {memory_mb:.1f} MB")
+        # Calculate memory usage
+        increment_bytes = self.precomputed_increments.numel() * self.precomputed_increments.element_size()
+        random_val_bytes = self.precomputed_random_vals.numel() * self.precomputed_random_vals.element_size()
+        memory_mb = (increment_bytes + random_val_bytes) / 1e6
+        print(f"Random increments and values pre-computed. Memory: {memory_mb:.1f} MB")
     
     def expected_squared_jump_distance_gpu(self):
         """Compute ESJD using optimized GPU operations."""

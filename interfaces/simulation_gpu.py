@@ -8,7 +8,7 @@ import time
 from .metropolis import MHAlgorithm
 from .target import TargetDistribution
 from .target_torch import TorchTargetDistribution
-
+from proposal_distributions import ProposalDistribution, NormalProposal, LaplaceProposal, UniformRadiusProposal
 
 class MCMCSimulation_GPU:
     """
@@ -20,7 +20,8 @@ class MCMCSimulation_GPU:
     
     def __init__(self, 
                  dim: int, 
-                 sigma: float, 
+                 sigma: float = None,  # Backward compatibility
+                 proposal_config: dict = None,  # New proposal system
                  num_iterations: int = 1000, 
                  algorithm: MHAlgorithm = None,
                  target_dist: Union[TargetDistribution, TorchTargetDistribution] = None,
@@ -37,7 +38,11 @@ class MCMCSimulation_GPU:
         
         Args:
             dim: Dimension of the target distribution
-            sigma: Proposal variance
+            sigma: Proposal variance (backward compatibility - creates NormalProposal)
+            proposal_config: Configuration dict for proposal distribution:
+                {'name': 'Normal', 'params': {'base_variance_scalar': 0.1}}
+                {'name': 'Laplace', 'params': {'base_variance_vector': [0.1, 0.2, ...]}}
+                {'name': 'UniformRadius', 'params': {'base_radius': 1.0}}
             num_iterations: Number of MCMC iterations
             algorithm: MCMC algorithm class
             target_dist: Target distribution
@@ -48,45 +53,90 @@ class MCMCSimulation_GPU:
             device: GPU device to use ('cuda', 'cpu', or None for auto-detection)
             pre_allocate: Whether to pre-allocate GPU memory for chains
             burn_in: Number of initial samples to discard for MCMC burn-in (default: 0)
-            **kwargs: Additional algorithm-specific parameters (e.g., iterative_temp_spacing 
-                     for parallel tempering algorithms)
+            **kwargs: Additional algorithm-specific parameters
         """
+        # Handle backward compatibility and proposal configuration
+        if proposal_config is None and sigma is not None:
+            # Backward compatibility: create Normal proposal from sigma
+            proposal_config = {
+                'name': 'Normal',
+                'params': {'base_variance_scalar': sigma}
+            }
+        elif proposal_config is None and sigma is None:
+            raise ValueError("Either sigma (backward compatibility) or proposal_config must be provided")
+        
         self.num_iterations = num_iterations
-        self.burn_in = max(0, min(burn_in, num_iterations - 1))
+        self.burn_in = max(0, burn_in)
         self.target_dist = target_dist
+        self.proposal_config = proposal_config
         
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
+        # Set device
+        self.device = device
+        self.pre_allocate = pre_allocate
+        
+        # Determine beta for proposal (for algorithms that use it)
         if hasattr(algorithm, '__name__') and 'GPU' in algorithm.__name__:
             # Check if this is a parallel tempering algorithm
             if 'ParallelTempering' in algorithm.__name__:
+                # For PT, each chain has its own beta from beta_ladder
+                algo_beta = 1.0  # PT handles beta internally
                 self.algorithm = algorithm(
                     dim, sigma, target_dist, symmetric, 
                     device=device, 
                     pre_allocate_steps=num_iterations if pre_allocate else None,
                     beta_ladder=beta_ladder,
                     swap_acceptance_rate=swap_acceptance_rate,
-                    burn_in=burn_in,
+                    burn_in=self.burn_in,
                     **kwargs
                 )
             else:
-                # Regular GPU RWM algorithm
-                self.algorithm = algorithm(
-                    dim, sigma, target_dist, symmetric, 
-                    device=device, 
-                    pre_allocate_steps=num_iterations if pre_allocate else None,
-                    beta=beta_ladder[0] if beta_ladder else 1.0,
-                    burn_in=burn_in,
-                    **kwargs
-                )
+                # Regular GPU RWM algorithm - create proposal distribution
+                algo_beta = beta_ladder[0] if beta_ladder else 1.0
+                
+                # Create proposal distribution if proposals are available
+                if ProposalDistribution is not None:
+                    proposal_dist = self._create_proposal_distribution(
+                        dim=dim, 
+                        beta=algo_beta, 
+                        proposal_config=proposal_config,
+                        device=torch.device(device),
+                        dtype=torch.float32,
+                        use_efficient_rng=kwargs.get('use_efficient_rng', True)
+                    )
+                    
+                    # Create algorithm with proposal distribution
+                    self.algorithm = algorithm(
+                        dim=dim,
+                        proposal_distribution=proposal_dist,
+                        target_dist=target_dist,
+                        symmetric=symmetric,
+                        beta=algo_beta,
+                        device=device,
+                        pre_allocate_steps=num_iterations if pre_allocate else None,
+                        burn_in=self.burn_in,
+                        use_efficient_rng=kwargs.get('use_efficient_rng', True),
+                        **{k: v for k, v in kwargs.items() if k != 'use_efficient_rng'}
+                    )
+                else:
+                    # Fallback to old sigma-based approach
+                    self.algorithm = algorithm(
+                        dim, sigma, target_dist, symmetric, 
+                        device=device, 
+                        pre_allocate_steps=num_iterations if pre_allocate else None,
+                        beta=algo_beta,
+                        burn_in=self.burn_in,
+                        **kwargs
+                    )
         else:
-            # Standard algorithm
+            # Standard algorithm - use old interface
             self.algorithm = algorithm(
                 dim, sigma, target_dist, symmetric, 
                 beta_ladder=beta_ladder, 
                 swap_acceptance_rate=swap_acceptance_rate,
-                burn_in=burn_in,
+                burn_in=self.burn_in,
                 **kwargs
             )
         
@@ -97,8 +147,6 @@ class MCMCSimulation_GPU:
             if torch.cuda.is_available():
                 torch.cuda.manual_seed(seed)
         
-        self.device = device
-        self.pre_allocate = pre_allocate
         self._start_time = None
         self._end_time = None
     
@@ -129,10 +177,13 @@ class MCMCSimulation_GPU:
         
         start_time = time.time()
         
-        # Check if this is a GPU parallel tempering algorithm with its own generate_samples method
-        if hasattr(self.algorithm, 'generate_samples') and 'ParallelTempering' in self.algorithm.__class__.__name__:
+        # Check if this is a GPU algorithm with its own optimized generate_samples method
+        if hasattr(self.algorithm, 'generate_samples') and ('ParallelTempering' in self.algorithm.__class__.__name__ or 'GPU' in self.algorithm.__class__.__name__):
             # Use the algorithm's own optimized generate_samples method
-            print(f"Using optimized GPU parallel tempering generate_samples method")
+            if 'ParallelTempering' in self.algorithm.__class__.__name__:
+                print(f"Using optimized GPU parallel tempering generate_samples method")
+            else:
+                print(f"Using optimized GPU {self.algorithm.__class__.__name__} generate_samples method")
             chain = self.algorithm.generate_samples(self.num_iterations)
             # Convert to list format for compatibility
             if hasattr(chain, 'cpu'):
@@ -324,4 +375,64 @@ class MCMCSimulation_GPU:
         
         if show:
             plt.show()
-        plt.clf() 
+        plt.clf()
+
+    def _create_proposal_distribution(self, dim: int, beta: float, proposal_config: dict, 
+                                     device: torch.device, dtype: torch.dtype, 
+                                     use_efficient_rng: bool = True) -> 'ProposalDistribution':
+        """Create a proposal distribution object from configuration.
+        
+        Args:
+            dim: Dimension of the distribution
+            beta: Inverse temperature parameter
+            proposal_config: Configuration dictionary
+            device: PyTorch device
+            dtype: Data type for tensors
+            use_efficient_rng: Whether to use efficient RNG
+            
+        Returns:
+            ProposalDistribution instance
+        """
+        if ProposalDistribution is None:
+            raise ImportError("Proposal distribution classes not available. Please check algorithms.proposals import.")
+        
+        name = proposal_config.get('name')
+        params = proposal_config.get('params', {})
+        
+        # Setup RNG generator if requested and on CUDA
+        rng_generator = None
+        if use_efficient_rng and device.type == 'cuda':
+            rng_generator = torch.Generator(device=device)
+        
+        if name == "Normal":
+            base_variance_scalar = params.get('base_variance_scalar')
+            if base_variance_scalar is None:
+                raise ValueError("Normal proposal requires 'base_variance_scalar' parameter")
+            return NormalProposal(dim, base_variance_scalar, beta, device, dtype, rng_generator)
+        
+        elif name == "Laplace":
+            base_variance_vector = params.get('base_variance_vector')
+            if base_variance_vector is None:
+                raise ValueError("Laplace proposal requires 'base_variance_vector' parameter")
+            
+            # Convert to tensor if needed
+            if isinstance(base_variance_vector, (list, tuple)):
+                base_variance_vector = torch.tensor(base_variance_vector, dtype=dtype)
+            elif isinstance(base_variance_vector, (int, float)):
+                # Scalar -> isotropic vector
+                base_variance_vector = torch.full((dim,), float(base_variance_vector), dtype=dtype)
+            elif isinstance(base_variance_vector, torch.Tensor):
+                base_variance_vector = base_variance_vector.to(dtype=dtype)
+            else:
+                raise ValueError(f"Invalid base_variance_vector type: {type(base_variance_vector)}")
+            
+            return LaplaceProposal(dim, base_variance_vector, beta, device, dtype, rng_generator)
+        
+        elif name == "UniformRadius":
+            base_radius = params.get('base_radius')
+            if base_radius is None:
+                raise ValueError("UniformRadius proposal requires 'base_radius' parameter")
+            return UniformRadiusProposal(dim, base_radius, beta, device, dtype, rng_generator)
+        
+        else:
+            raise ValueError(f"Unknown proposal distribution name: {name}") 

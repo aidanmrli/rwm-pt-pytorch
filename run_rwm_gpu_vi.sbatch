@@ -19,7 +19,6 @@ mkdir -p logs
 # Activate the environment
 source /h/liaidan/random-walk-metropolis/venv/bin/activate
 
-# Set the seed based on the SLURM array task ID
 #### OPTIONS for target distribution: 
 # MultivariateNormal, MultivariateNormalScaled
 # RoughCarpet, RoughCarpetScaled, 
@@ -28,14 +27,21 @@ source /h/liaidan/random-walk-metropolis/venv/bin/activate
 # FullRosenbrock, EvenRosenbrock, HybridRosenbrock
 # NealFunnel, SuperFunnel
 
-TARGET_DISTRIBUTION="MultivariateNormalScaled"
+TARGET_DISTRIBUTION="MultivariateNormal"
 
-# Run the experiment with default parameters but varying seed
+#### OPTIONS for proposal distribution:
+# Normal, Laplace, UniformRadius
+PROPOSAL_DISTRIBUTION="Laplace" # Default proposal
+
 python experiment_RWM_GPU.py \
     --target $TARGET_DISTRIBUTION \
-    --dim 20 \
+    --proposal $PROPOSAL_DISTRIBUTION \
+    --dim 2 \
     --num_iters 200000 \
     --var_max 4 \
+    --burn_in 1000 \
+    --hybrid_rosenbrock_n1 3 \
+    --hybrid_rosenbrock_n2 2 \
     --seed $SLURM_ARRAY_TASK_ID
 
 echo "Completed RWM GPU study for seed $SLURM_ARRAY_TASK_ID" 

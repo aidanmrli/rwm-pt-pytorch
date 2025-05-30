@@ -9,11 +9,11 @@
 #SBATCH --mem=20G
 #SBATCH --gres=gpu:1
 #SBATCH --nodelist=concerto[1-3],overture,quartet[1-3,5],dgx1,sonata2
-#SBATCH --array=1-30
+#SBATCH --array=1-20%10
 #SBATCH --output=logs/rwm_%j.out
 #SBATCH --error=logs/rwm_%j.err
 
-#
+#concerto[1-3],overture,quartet[1-3,5],dgx1,sonata2,
 # Options for GPU: 
 # concerto[1-3],overture
 # quartet[1-3,5],dgx1,sonata2,bulbasaur,charmander,squirtle
@@ -23,7 +23,6 @@ mkdir -p logs
 # Activate the environment
 . /mfs1/u/$USER/envs/rwm
 
-# Set the seed based on the SLURM array task ID
 #### OPTIONS for target distribution: 
 # MultivariateNormal, MultivariateNormalScaled
 # RoughCarpet, RoughCarpetScaled, 
@@ -32,13 +31,19 @@ mkdir -p logs
 # FullRosenbrock, EvenRosenbrock, HybridRosenbrock
 # NealFunnel, SuperFunnel
 
-TARGET_DISTRIBUTION="ThreeMixtureScaled"
+TARGET_DISTRIBUTION="MultivariateNormal"
+
+#### OPTIONS for proposal distribution:
+# Normal, Laplace, UniformRadius
+PROPOSAL_DISTRIBUTION="Laplace" # Default proposal
 
 python experiment_RWM_GPU.py \
     --target $TARGET_DISTRIBUTION \
-    --dim 50 \
-    --num_iters 300000 \
-    --var_max 3.5 \
+    --proposal $PROPOSAL_DISTRIBUTION \
+    --dim 2 \
+    --num_iters 200000 \
+    --var_max 4 \
+    --burn_in 1000 \
     --hybrid_rosenbrock_n1 3 \
     --hybrid_rosenbrock_n2 2 \
     --seed $SLURM_ARRAY_TASK_ID
