@@ -162,8 +162,9 @@ def get_target_distribution(name, dim, use_torch=True, device=None, **kwargs):
         else:
             raise ValueError("Unknown target distribution name")
 
-def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, seed=42, burn_in=1000, **kwargs):
-    """Run many simulations with different variance values, then save and plot the progression of ESJD and acceptance rate."""
+def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_max=3.5, 
+              seed=42, burn_in=1000, proposal_name="Normal", proposal_params=None, **kwargs):
+    """Run many simulations with different scale parameter values for different proposal distributions."""
     
     # Set device explicitly
     if torch.cuda.is_available():
@@ -179,40 +180,73 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         n2 = kwargs.get('n2', 5)
         actual_dim = calculate_hybrid_rosenbrock_dim(n1, n2)
         print(f"\n{'='*60}")
-        print(f"Target: {target_name}, n1={n1}, n2={n2}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
+        print(f"Target: {target_name}, n1={n1}, n2={n2}, Actual Dimension: {actual_dim}")
+        print(f"Proposal: {proposal_name}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     elif target_name == "SuperFunnel":
         J = kwargs.get('J', 5)
         K = kwargs.get('K', 3)
         actual_dim = calculate_super_funnel_dim(J, K)
         print(f"\n{'='*60}")
-        print(f"Target: {target_name}, J={J}, K={K}, Actual Dimension: {actual_dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
+        print(f"Target: {target_name}, J={J}, K={K}, Actual Dimension: {actual_dim}")
+        print(f"Proposal: {proposal_name}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     else:
         actual_dim = dim
         print(f"\n{'='*60}")
-        print(f"Target: {target_name}, Dimension: {dim}, Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
+        print(f"Target: {target_name}, Dimension: {dim}, Proposal: {proposal_name}")
+        print(f"Samples: {num_iters}, Burn-in: {burn_in}, Seed: {seed}")
         print(f"{'='*60}")
     
     target_distribution = get_target_distribution(target_name, dim, use_torch=True, device=device, **kwargs)
-    var_value_range = np.linspace(0.01, var_max, 40)
+    scale_param_range = np.linspace(0.01, var_max, 40)
     
     acceptance_rates = []
     expected_squared_jump_distances = []
     times = []
     
-    print(f"\nRunning simulations with {len(var_value_range)} variance values...")
+    print(f"\nRunning simulations with {len(scale_param_range)} {proposal_name} proposal scale values...")
     
     total_start = time.time()
     
     # Use tqdm for progress bar
-    for i, var in enumerate(tqdm.tqdm(var_value_range, desc="Running RWM with current variance =", unit="config")):
-        proposal_variance = (var ** 2) / (actual_dim ** (1))
+    for i, scale_param in enumerate(tqdm.tqdm(scale_param_range, desc=f"Running RWM with {proposal_name} scale =", unit="config")):
+        
+        # Create proposal configuration based on proposal type and scale parameter
+        if proposal_name == "Normal":
+            # For Normal: scale_param^2 / dim gives variance (consistent with original experiment)
+            proposal_variance = (scale_param ** 2) / (actual_dim ** 1)
+            proposal_config = {
+                'name': 'Normal',
+                'params': {'base_variance_scalar': proposal_variance}
+            }
+        elif proposal_name == "Laplace":
+            # For Laplace: use similar scaling but interpret as variance 
+            effective_variance = (scale_param ** 2) / (actual_dim ** 1)
+            if proposal_params and 'anisotropic' in proposal_params:
+                # Use provided variance vector
+                base_variance_vector = torch.tensor(proposal_params['anisotropic'], dtype=torch.float32) * effective_variance
+            else:
+                # Isotropic case
+                base_variance_vector = effective_variance
+            proposal_config = {
+                'name': 'Laplace', 
+                'params': {'base_variance_vector': base_variance_vector}
+            }
+        elif proposal_name == "UniformRadius":
+            # For Uniform: scale_param directly as radius parameter
+            proposal_config = {
+                'name': 'UniformRadius',
+                'params': {'base_radius': scale_param}
+            }
+        else:
+            raise ValueError(f"Unknown proposal name: {proposal_name}")
+        
         iteration_start = time.time()
         
         simulation = MCMCSimulation_GPU(
             dim=actual_dim,
-            sigma=proposal_variance,
+            proposal_config=proposal_config,
             num_iterations=num_iters,
             algorithm=RandomWalkMH_GPU_Optimized,
             target_dist=target_distribution,
@@ -236,44 +270,67 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     max_esjd = max(expected_squared_jump_distances)
     max_esjd_index = np.argmax(expected_squared_jump_distances)
     max_acceptance_rate = acceptance_rates[max_esjd_index]
-    max_variance_value = var_value_range[max_esjd_index]
+    max_scale_param = scale_param_range[max_esjd_index]
     
     print(f"\nFinal Results:")
     print(f"   Total time: {total_time:.1f} seconds")
     print(f"   Average time per configuration: {np.mean(times):.1f} seconds")
     print(f"   Maximum ESJD: {max_esjd:.6f}")
     print(f"   Optimal acceptance rate: {max_acceptance_rate:.3f}")
-    print(f"   Optimal variance value: {max_variance_value:.6f}")
+    print(f"   Optimal scale parameter: {max_scale_param:.6f}")
     
     # Save results
     data = {
         'target_distribution': target_name,
+        'proposal_distribution': proposal_name,
         'dimension': actual_dim,
         'num_iterations': num_iters,
         'seed': seed,
         'total_time': total_time,
         'max_esjd': max_esjd,
         'max_acceptance_rate': max_acceptance_rate,
-        'max_variance_value': max_variance_value,
+        'max_scale_param': max_scale_param,
         'expected_squared_jump_distances': expected_squared_jump_distances,
         'acceptance_rates': acceptance_rates,
-        'var_value_range': var_value_range.tolist(),
+        'scale_param_range': scale_param_range.tolist(),
         'times': times
     }
     
-    filename = f"data/{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.json"
+    filename = f"data/{target_name}_{proposal_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.json"
     with open(filename, "w") as file:
         json.dump(data, file, indent=2)
     print(f"   Results saved to: {filename}")
     
-    # Create traceplot using optimal variance
-    print(f"\nGenerating traceplot with optimal variance ({max_variance_value:.6f})...")
-    optimal_proposal_variance = (max_variance_value ** 2) / (actual_dim ** (1))
+    # Create traceplot using optimal scale parameter
+    print(f"\nGenerating traceplot with optimal {proposal_name} scale parameter ({max_scale_param:.6f})...")
     
-    # Run one more simulation with optimal variance to get chain for traceplot
+    # Recreate optimal proposal config
+    if proposal_name == "Normal":
+        optimal_proposal_variance = (max_scale_param ** 2) / (actual_dim ** 1)
+        optimal_proposal_config = {
+            'name': 'Normal',
+            'params': {'base_variance_scalar': optimal_proposal_variance}
+        }
+    elif proposal_name == "Laplace":
+        optimal_effective_variance = (max_scale_param ** 2) / (actual_dim ** 1)
+        if proposal_params and 'anisotropic' in proposal_params:
+            optimal_base_variance_vector = torch.tensor(proposal_params['anisotropic'], dtype=torch.float32) * optimal_effective_variance
+        else:
+            optimal_base_variance_vector = optimal_effective_variance
+        optimal_proposal_config = {
+            'name': 'Laplace', 
+            'params': {'base_variance_vector': optimal_base_variance_vector}
+        }
+    elif proposal_name == "UniformRadius":
+        optimal_proposal_config = {
+            'name': 'UniformRadius',
+            'params': {'base_radius': max_scale_param}
+        }
+    
+    # Run one more simulation with optimal scale parameter to get chain for traceplot
     traceplot_simulation = MCMCSimulation_GPU(
         dim=actual_dim,
-        sigma=optimal_proposal_variance,
+        proposal_config=optimal_proposal_config,
         num_iterations=num_iters,
         algorithm=RandomWalkMH_GPU_Optimized,
         target_dist=target_distribution,
@@ -308,7 +365,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         plt.plot(chain_data[:, 0], alpha=0.7, linewidth=0.5, color='blue')
         plt.xlabel('Iteration')
         plt.ylabel('Value')
-        plt.title(f'Traceplot - {target_name} (Dimension 1)\nOptimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+        plt.title(f'Traceplot - {target_name} (Dimension 1)\nOptimal scale parameter: {max_scale_param:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
         plt.grid(True, alpha=0.3)
     else:
         # Multiple dimensions subplot
@@ -319,7 +376,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
             plt.grid(True, alpha=0.3)
             
             if i == 0:
-                plt.title(f'Traceplot - {target_name} (First {num_dims_to_plot} dimensions)\nOptimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+                plt.title(f'Traceplot - {target_name} (First {num_dims_to_plot} dimensions)\nOptimal scale parameter: {max_scale_param:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
             if i == num_dims_to_plot - 1:
                 plt.xlabel('Iteration')
     
@@ -329,7 +386,7 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     os.makedirs("images", exist_ok=True)
     
     # Save traceplot
-    output_filename = f"images/traceplot_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
+    output_filename = f"images/traceplot_{target_name}_{proposal_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
     plt.savefig(output_filename, dpi=300, bbox_inches='tight')
     plt.clf()
     plt.close()
@@ -430,12 +487,12 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
         plt.xlabel('Dimension 1')
         plt.ylabel('Dimension 2')
         plt.title(f'2D Target Density with MCMC Samples - {target_name}\n'
-                 f'Optimal variance: {max_variance_value:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
+                 f'Optimal scale parameter: {max_scale_param:.6f}, Acceptance rate: {max_acceptance_rate:.3f}')
         # plt.legend()
         plt.grid(True, alpha=0.3)
         
         # Save 2D visualization
-        density_filename = f"images/density2D_{target_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
+        density_filename = f"images/density2D_{target_name}_{proposal_name}_RWM_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.png"
         plt.savefig(density_filename, dpi=300, bbox_inches='tight')
         plt.clf()
         plt.close()
@@ -444,13 +501,19 @@ def run_study(dim, target_name="MultivariateNormalTorch", num_iters=100000, var_
     return data
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="GPU-accelerated RWM simulations")
+    parser = argparse.ArgumentParser(description="GPU-accelerated RWM simulations with flexible proposal distributions")
     parser.add_argument("--dim", type=int, default=20, help="Dimension of the target distribution")
     parser.add_argument("--target", type=str, default="MultivariateNormal", help="Target distribution")
     parser.add_argument("--num_iters", type=int, default=100000, help="Number of iterations")
-    parser.add_argument("--var_max", type=float, default=3.5, help="Maximum variance value")
+    parser.add_argument("--var_max", type=float, default=3.5, help="Maximum scale parameter value")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--burn_in", type=int, default=1000, help="Burn-in period")
+    
+    # Proposal distribution arguments
+    parser.add_argument("--proposal", type=str, default="Normal", choices=["Normal", "Laplace", "UniformRadius"],
+                      help="Proposal distribution type")
+    parser.add_argument("--laplace_anisotropic", type=str, default=None,
+                      help="JSON string for anisotropic Laplace variance vector, e.g., '[0.1, 0.2, 0.3]'")
     
     parser.add_argument("--hybrid_rosenbrock_n1", type=int, default=3, help="Block length parameter for HybridRosenbrock")
     parser.add_argument("--hybrid_rosenbrock_n2", type=int, default=5, help="Number of blocks/rows for HybridRosenbrock")
@@ -470,12 +533,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if torch.cuda.is_available():
-        print(f" GPU detected: {torch.cuda.get_device_name()}")
+        print(f"🚀 GPU detected: {torch.cuda.get_device_name()}")
         print(f"   CUDA version: {torch.version.cuda}")
         print(f"   GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
     else:
         print("⚠️  No GPU detected. Running on CPU (will be slower)")
     
+    # Prepare kwargs
     kwargs = {}
     if args.target == "HybridRosenbrock":
         kwargs['n1'] = args.hybrid_rosenbrock_n1
@@ -491,6 +555,20 @@ if __name__ == "__main__":
         kwargs['prior_hypermean_std'] = args.super_funnel_prior_hypermean_std
         kwargs['prior_tau_scale'] = args.super_funnel_prior_tau_scale
     
-    results = run_study(args.dim, args.target, args.num_iters, args.var_max, args.seed, args.burn_in, **kwargs)
+    # Prepare proposal parameters
+    proposal_params = {}
+    if args.proposal == "Laplace" and args.laplace_anisotropic:
+        import json
+        try:
+            anisotropic_vector = json.loads(args.laplace_anisotropic)
+            proposal_params['anisotropic'] = anisotropic_vector
+            print(f"📊 Using anisotropic Laplace proposal with variance vector: {anisotropic_vector}")
+        except json.JSONDecodeError:
+            print("⚠️  Invalid JSON for laplace_anisotropic. Using isotropic Laplace.")
+    
+    print(f"🎯 Using {args.proposal} proposal distribution")
+    
+    results = run_study(args.dim, args.target, args.num_iters, args.var_max, args.seed, args.burn_in, 
+                       args.proposal, proposal_params, **kwargs)
 
-    print(f"Finished running experiment.") 
+    print(f"🎉 Finished running experiment with {args.proposal} proposal.") 
