@@ -21,7 +21,16 @@ class MHAlgorithm:
         self.symmetric = symmetric
         self.num_acceptances = 0    # use this to calculate acceptance rate
         self.acceptance_rate = 0
-        self.target_density = target_dist.density
+        
+        # Handle both TargetDistribution and TorchTargetDistribution
+        if target_dist is not None:
+            if hasattr(target_dist, 'density'):
+                self.target_density = target_dist.density
+            else:
+                # Fallback for objects that don't have density method
+                self.target_density = None
+        else:
+            self.target_density = None
 
     def reset(self):
         """Reset the Markov chain to the initial state."""
