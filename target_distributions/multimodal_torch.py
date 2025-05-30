@@ -5,6 +5,35 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
     """
     PyTorch-native three-component mixture distribution with full GPU acceleration.
     Customizable mode centers and weights for flexible multimodal distributions.
+
+    The target probability density function `p(x)` is a mixture of three Gaussian components.
+    Let `D` be the dimension (`dim`), `w_k` be the mixing weight for component `k`
+    (`mode_weights[k]`), and `\mu_k` be the mean (mode center) for component `k`
+    (`mode_centers[k]`). All vectors are `D`-dimensional.
+
+    **Standard Case (`scaling=False`, default):**
+    The density `p(x)` is given by:
+    `p(x) = \sum_{k=1}^3 w_k * N(x | \mu_k, I_D)`
+    where `N(z | m, C)` denotes the probability density function of a multivariate
+    normal distribution with mean `m` and covariance matrix `C`. Here, `I_D` is
+    the `D`-dimensional identity matrix. Specifically, this means:
+    `N(x | \mu_k, I_D) = (2\pi)^{-D/2} \exp(-0.5 * ||x - \mu_k||_2^2)`
+    where `|| \cdot ||_2^2` denotes the squared L2 norm.
+
+    **Scaled Case (`scaling=True`):**
+    A `D`-dimensional vector of scaling factors, `s = (s_1, ..., s_D)`
+    (instance attribute `self.scaling_factors`), is generated during initialization.
+    Each `s_j` is drawn uniformly from the interval `[0.02, 1.98]`.
+    The density `p(x)` is then given by:
+    `p(x) = \sum_{k=1}^3 w_k * ( \prod_{j=1}^D s_j ) * N(x \odot s | \mu_k, I_D)`
+    where `x \odot s` denotes the element-wise product `(x_1 s_1, ..., x_D s_D)`.
+    The term `\prod_{j=1}^D s_j` is the absolute Jacobian determinant of the
+    transformation `y = x \odot s`. The Gaussian component is:
+    `N(x \odot s | \mu_k, I_D) = (2\pi)^{-D/2} \exp(-0.5 * ||(x \odot s) - \mu_k||_2^2)`.
+    In this case, the means `\mu_k` are centers in the space of the scaled variable
+    `y = x \odot s`. The density `p(x)` is obtained by evaluating the Gaussian
+    `N(y | \mu_k, I_D)` at `y = x \odot s` and then multiplying by the Jacobian
+    determinant to correctly represent the density in the original space of `x`.
     """
 
     def __init__(self, dim, scaling=False, device=None, mode_centers=None, mode_weights=None):
