@@ -66,7 +66,7 @@ class MCMCSimulation_GPU:
             raise ValueError("Either sigma (backward compatibility) or proposal_config must be provided")
         
         self.num_iterations = num_iterations
-        self.burn_in = max(0, min(burn_in, num_iterations - 1))
+        self.burn_in = max(0, burn_in)
         self.target_dist = target_dist
         self.proposal_config = proposal_config
         
