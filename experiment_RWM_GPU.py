@@ -29,6 +29,8 @@ def get_target_distribution(name, dim, use_torch=True, device=None, **kwargs):
         # Use PyTorch-native implementations for GPU acceleration
         if name == "MultivariateNormal":
             return MultivariateNormalTorch(dim, device=device)
+        elif name == "MultivariateNormalScaled":
+            return ScaledMultivariateNormalTorch(dim, device=device)
         elif name == "RoughCarpet":
             # Custom mode centers and weights for better separation
             mode_centers = kwargs.get('mode_centers', [-4.0, 0.0, 4.0]) 

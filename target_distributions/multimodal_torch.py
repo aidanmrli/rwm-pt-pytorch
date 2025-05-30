@@ -13,7 +13,9 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
 
         Args:
             dim: Dimension of the distribution
-            scaling: Whether to apply random scaling factors to coordinates
+            scaling: Whether to apply random scaling factors to coordinates using the new method.
+                     If True, density is product_i s_i * N(s_i*x_i | mean, I).
+                     If False, uses standard N(x | mean, cov).
             device: PyTorch device for GPU acceleration
             mode_centers: List/array of 3 mode centers, each of length dim.
                          Default: [[-5, 0, ..., 0], [0, 0, ..., 0], [5, 0, ..., 0]]
@@ -37,34 +39,41 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
         # Validate inputs
         self._validate_mode_parameters(mode_centers, mode_weights, dim)
         
-        # Generate name based on parameters
-        self.name = self._generate_name(scaling, mode_centers, mode_weights)
-        
         # Initialize means from mode_centers
         self.means = torch.tensor(mode_centers, device=self.device, dtype=torch.float32)
-        
-        # Initialize covariance matrices (identity matrices)
-        self.covs = torch.eye(dim, device=self.device, dtype=torch.float32).unsqueeze(0).repeat(3, 1, 1)
-        
-        if scaling:
-            # Apply random scaling factors uniformly from [0.02, 1.98] with expectation 1.0
-            scaling_factors = torch.rand(dim, device=self.device, dtype=torch.float32) * (1.98 - 0.02) + 0.02
-            self.scaling_factors = scaling_factors
-            # Apply scaling to covariance matrices
-            for i in range(3):
-                self.covs[i] = self.covs[i] * scaling_factors.unsqueeze(0) * scaling_factors.unsqueeze(1)
-        
-        # Pre-compute inverse covariance matrices and determinants
-        self.cov_invs = torch.linalg.inv(self.covs)
-        self.cov_dets = torch.linalg.det(self.covs)
-        
-        # Pre-compute log normalization constants for each component
-        log_2pi = torch.log(torch.tensor(2.0 * torch.pi, device=self.device, dtype=torch.float32))
-        self.log_norm_consts = -0.5 * (dim * log_2pi + torch.log(self.cov_dets))
         
         # Initialize mixing weights
         self.mixing_weights = torch.tensor(mode_weights, device=self.device, dtype=torch.float32)
         self.log_mixing_weights = torch.log(self.mixing_weights)
+
+        _log_2pi = torch.log(torch.tensor(2.0 * torch.pi, device=self.device, dtype=torch.float32))
+
+        if scaling:
+            self.scaling_arg_from_constructor = True # Mark that new scaling is active
+            self.scaling_factors = torch.rand(dim, device=self.device, dtype=torch.float32) * (1.98 - 0.02) + 0.02
+            self.log_jacobian = torch.sum(torch.log(self.scaling_factors))
+            self.base_log_norm_const_for_scaled = -0.5 * self.dim * _log_2pi
+            
+            # Initialize these for structural consistency, though not directly used by scaled log_density
+            self.covs = torch.eye(self.dim, device=self.device, dtype=torch.float32).unsqueeze(0).repeat(3, 1, 1)
+            self.cov_invs = self.covs.clone() # inv(I) is I
+            self.cov_dets = torch.ones(3, device=self.device, dtype=torch.float32) # det(I) is 1
+            self.log_norm_consts = -0.5 * (self.dim * _log_2pi + torch.log(self.cov_dets))
+
+        else:
+            self.scaling_arg_from_constructor = False
+            # Initialize covariance matrices (identity matrices for non-scaled version)
+            self.covs = torch.eye(dim, device=self.device, dtype=torch.float32).unsqueeze(0).repeat(3, 1, 1)
+            
+            # Pre-compute inverse covariance matrices and determinants
+            self.cov_invs = torch.linalg.inv(self.covs)
+            self.cov_dets = torch.linalg.det(self.covs)
+            
+            # Pre-compute log normalization constants for each component
+            self.log_norm_consts = -0.5 * (dim * _log_2pi + torch.log(self.cov_dets))
+
+        # Generate name based on parameters (pass the original scaling argument)
+        self.name = self._generate_name(scaling, mode_centers, mode_weights)
 
     def _validate_mode_parameters(self, mode_centers, mode_weights, dim):
         """Validate mode centers and weights parameters."""
@@ -145,50 +154,89 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
         if x.device != self.device:
             x = x.to(self.device)
         
-        if len(x.shape) == 1:
-            # Single point: shape (dim,)
-            log_component_densities = torch.zeros(3, device=self.device, dtype=torch.float32)
-            
-            for i in range(3):
-                centered = x - self.means[i]
-                quadratic_form = torch.dot(centered, torch.matmul(self.cov_invs[i], centered))
-                log_component_densities[i] = -0.5 * quadratic_form + self.log_norm_consts[i] + self.log_mixing_weights[i]
-            
-            # Use logsumexp for numerical stability
-            log_density = torch.logsumexp(log_component_densities, dim=0)
-            return log_density
+        if hasattr(self, 'scaling_arg_from_constructor') and self.scaling_arg_from_constructor:
+            # New scaling logic
+            if len(x.shape) == 1: # Single point
+                x_scaled = x * self.scaling_factors
+                log_component_densities = torch.zeros(3, device=self.device, dtype=torch.float32)
+                for i in range(3):
+                    centered_scaled = x_scaled - self.means[i]
+                    quadratic_form = torch.dot(centered_scaled, centered_scaled)
+                    log_component_densities[i] = -0.5 * quadratic_form + \
+                                                 self.base_log_norm_const_for_scaled + \
+                                                 self.log_jacobian + \
+                                                 self.log_mixing_weights[i]
+                log_density_val = torch.logsumexp(log_component_densities, dim=0)
+                return log_density_val
+            else: # Batch
+                batch_size = x.shape[0]
+                x_scaled = x * self.scaling_factors.unsqueeze(0)
+                log_component_densities = torch.zeros(batch_size, 3, device=self.device, dtype=torch.float32)
+                for i in range(3):
+                    centered_scaled = x_scaled - self.means[i].unsqueeze(0)
+                    quadratic_form = torch.sum(centered_scaled * centered_scaled, dim=1)
+                    log_component_densities[:, i] = -0.5 * quadratic_form + \
+                                                    self.base_log_norm_const_for_scaled + \
+                                                    self.log_jacobian + \
+                                                    self.log_mixing_weights[i]
+                log_densities_val = torch.logsumexp(log_component_densities, dim=1)
+                return log_densities_val
         else:
-            # Batch: shape (batch_size, dim)
-            batch_size = x.shape[0]
-            log_component_densities = torch.zeros(batch_size, 3, device=self.device, dtype=torch.float32)
-            
-            for i in range(3):
-                centered = x - self.means[i].unsqueeze(0)  # Broadcasting
-                temp = torch.matmul(centered, self.cov_invs[i])
-                quadratic_form = torch.sum(temp * centered, dim=1)
-                log_component_densities[:, i] = (-0.5 * quadratic_form + 
-                                               self.log_norm_consts[i] + 
-                                               self.log_mixing_weights[i])
-            
-            # Use logsumexp for numerical stability
-            log_densities = torch.logsumexp(log_component_densities, dim=1)
-            return log_densities
+            # Original logic for non-scaled or old-scaled version
+            if len(x.shape) == 1:
+                # Single point: shape (dim,)
+                log_component_densities = torch.zeros(3, device=self.device, dtype=torch.float32)
+                
+                for i in range(3):
+                    centered = x - self.means[i]
+                    quadratic_form = torch.dot(centered, torch.matmul(self.cov_invs[i], centered))
+                    log_component_densities[i] = -0.5 * quadratic_form + self.log_norm_consts[i] + self.log_mixing_weights[i]
+                
+                # Use logsumexp for numerical stability
+                log_density = torch.logsumexp(log_component_densities, dim=0)
+                return log_density
+            else:
+                # Batch: shape (batch_size, dim)
+                batch_size = x.shape[0]
+                log_component_densities = torch.zeros(batch_size, 3, device=self.device, dtype=torch.float32)
+                
+                for i in range(3):
+                    centered = x - self.means[i].unsqueeze(0)  # Broadcasting
+                    temp = torch.matmul(centered, self.cov_invs[i])
+                    quadratic_form = torch.sum(temp * centered, dim=1)
+                    log_component_densities[:, i] = (-0.5 * quadratic_form + 
+                                                   self.log_norm_consts[i] + 
+                                                   self.log_mixing_weights[i])
+                
+                # Use logsumexp for numerical stability
+                log_densities = torch.logsumexp(log_component_densities, dim=1)
+                return log_densities
 
     def draw_sample(self, beta=1.0):
         """Draw a sample from the distribution (CPU implementation for compatibility)."""
         # Use PyTorch for sampling but return numpy for compatibility
         with torch.no_grad():
-            # Pick a mode at random and sample from it
-            random_integer = torch.randint(0, 3, (1,), device=self.device).item()
-            target_mean, target_cov = self.means[random_integer], self.covs[random_integer]
-            
-            # Generate sample using PyTorch multivariate normal
-            cov_scaled = target_cov / beta
-            chol = torch.linalg.cholesky(cov_scaled)
-            standard_sample = torch.randn(self.dim, device=self.device, dtype=torch.float32)
-            sample = target_mean + torch.matmul(chol, standard_sample)
-            
-            return sample.cpu().numpy()
+            if hasattr(self, 'scaling_arg_from_constructor') and self.scaling_arg_from_constructor:
+                # New scaling logic for sampling
+                component_idx = torch.multinomial(self.mixing_weights, 1, replacement=True).item()
+                target_mean = self.means[component_idx]
+                
+                beta_tensor = torch.tensor(beta, device=self.device, dtype=torch.float32)
+                # Sample y ~ N(target_mean, (1/beta) * I)
+                y_sample = target_mean + torch.randn(self.dim, device=self.device, dtype=torch.float32) / torch.sqrt(beta_tensor)
+                # Transform to x: x = y / s
+                sample = y_sample / self.scaling_factors
+                return sample.cpu().numpy()
+            else:
+                # Original sampling logic
+                random_integer = torch.randint(0, 3, (1,), device=self.device).item()
+                target_mean, target_cov = self.means[random_integer], self.covs[random_integer]
+                
+                cov_scaled = target_cov / beta
+                chol = torch.linalg.cholesky(cov_scaled)
+                standard_sample = torch.randn(self.dim, device=self.device, dtype=torch.float32)
+                sample = target_mean + torch.matmul(chol, standard_sample)
+                return sample.cpu().numpy()
     
     def draw_samples_torch(self, n_samples, beta=1.0):
         """
@@ -201,25 +249,39 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
         Returns:
             Tensor of samples with shape (n_samples, dim)
         """
-        # Sample component indices
-        component_indices = torch.multinomial(self.mixing_weights, n_samples, replacement=True)
-        
         samples = torch.zeros(n_samples, self.dim, device=self.device, dtype=torch.float32)
-        
-        for i in range(3):
-            mask = (component_indices == i)
-            n_component_samples = mask.sum().item()
-            
-            if n_component_samples > 0:
-                # Generate standard normal samples
-                standard_samples = torch.randn(n_component_samples, self.dim, device=self.device, dtype=torch.float32)
+        component_indices = torch.multinomial(self.mixing_weights, n_samples, replacement=True)
+        beta_tensor = torch.tensor(beta, device=self.device, dtype=torch.float32)
+
+        if hasattr(self, 'scaling_arg_from_constructor') and self.scaling_arg_from_constructor:
+            # New scaling logic for sampling
+            for i in range(3): # For each of the 3 modes
+                mask = (component_indices == i)
+                n_component_samples = mask.sum().item()
                 
-                # Apply covariance structure
-                cov_scaled = self.covs[i] / beta
-                chol = torch.linalg.cholesky(cov_scaled)
-                component_samples = self.means[i].unsqueeze(0) + torch.matmul(standard_samples, chol.T)
+                if n_component_samples > 0:
+                    target_mean = self.means[i]
+                    # Sample y ~ N(target_mean, (1/beta) * I)
+                    # standard_normals are N(0,I)
+                    standard_normals = torch.randn(n_component_samples, self.dim, device=self.device, dtype=torch.float32)
+                    # y_samples are N(target_mean, (1/beta)*I)
+                    y_samples = target_mean.unsqueeze(0) + standard_normals / torch.sqrt(beta_tensor)
+                    # Transform to x: x = y / s
+                    component_samples = y_samples / self.scaling_factors.unsqueeze(0)
+                    samples[mask] = component_samples
+        else:
+            # Original sampling logic
+            for i in range(3): # For each of the 3 modes
+                mask = (component_indices == i)
+                n_component_samples = mask.sum().item()
                 
-                samples[mask] = component_samples
+                if n_component_samples > 0:
+                    standard_samples = torch.randn(n_component_samples, self.dim, device=self.device, dtype=torch.float32)
+                    
+                    cov_scaled = self.covs[i] / beta # beta is scalar here
+                    chol = torch.linalg.cholesky(cov_scaled)
+                    component_samples = self.means[i].unsqueeze(0) + torch.matmul(standard_samples, chol.T)
+                    samples[mask] = component_samples
         
         return samples
 
@@ -233,8 +295,13 @@ class ThreeMixtureDistributionTorch(TorchTargetDistribution):
         self.log_norm_consts = self.log_norm_consts.to(device)
         self.mixing_weights = self.mixing_weights.to(device)
         self.log_mixing_weights = self.log_mixing_weights.to(device)
-        if hasattr(self, 'scaling_factors'):
+        
+        if hasattr(self, 'scaling_factors'): # This implies scaling_arg_from_constructor was True
             self.scaling_factors = self.scaling_factors.to(device)
+        if hasattr(self, 'log_jacobian'):
+            self.log_jacobian = self.log_jacobian.to(device)
+        if hasattr(self, 'base_log_norm_const_for_scaled'):
+            self.base_log_norm_const_for_scaled = self.base_log_norm_const_for_scaled.to(device)
         return self
 
 
@@ -313,7 +380,7 @@ class RoughCarpetDistributionTorch(TorchTargetDistribution):
         base_name = "RoughCarpetTorch"
         
         # Check if using default parameters
-        default_centers = [-15.0, 0.0, 15.0]
+        default_centers = [-5.0, 0.0, 5.0]
         default_weights = [0.5, 0.3, 0.2]
         
         # Convert to tensors for comparison

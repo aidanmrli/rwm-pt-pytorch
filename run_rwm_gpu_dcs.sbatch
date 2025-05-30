@@ -25,11 +25,13 @@ mkdir -p logs
 
 # Set the seed based on the SLURM array task ID
 #### OPTIONS for target distribution: 
-# MultivariateNormal, 
+# MultivariateNormal, MultivariateNormalScaled
 # RoughCarpet, RoughCarpetScaled, 
 # ThreeMixture, ThreeMixtureScaled, 
 # IIDGamma, IIDBeta, Hypercube
 # FullRosenbrock, EvenRosenbrock, HybridRosenbrock
+# NealFunnel, SuperFunnel
+
 TARGET_DISTRIBUTION="ThreeMixtureScaled"
 
 python experiment_RWM_GPU.py \
