@@ -107,6 +107,11 @@ The codebase follows a modular, interface-based design adhering to SOLID princip
    - `experiment_pt.py`: Parallel tempering optimization studies
    - `experiment_pt_GPU.py`: GPU-accelerated parallel tempering optimization with advanced diagnostics
 
+5. **Proposal Distributions** (`proposal_distributions/`): Proposal distribution logic
+   - `base.py`: Defines the `ProposalDistribution` abstract base class
+   - `normal.py`, `laplace.py`, `uniform.py`: Concrete implementations for Normal, Laplace, and UniformRadius proposals
+   - `__init__.py`: Exports these classes
+
 ## Key Features
 
 ### Algorithm Capabilities
@@ -248,4 +253,9 @@ This codebase enables:
 4. **Comparative Studies**: Systematic algorithm performance evaluation
 5. **Educational Tool**: Clear implementation of fundamental MCMC concepts
 
-The modular design and comprehensive experimental framework make this an ideal platform for MCMC research, algorithm development, and optimal scaling studies in high-dimensional statistical inference. 
+The modular design and comprehensive experimental framework make this an ideal platform for MCMC research, algorithm development, and optimal scaling studies in high-dimensional statistical inference.
+
+### Recent Major Changes
+
+*   **Refactored Proposal Distribution System**: Introduced a `proposal_distributions` directory and a `ProposalDistribution` class hierarchy (`base.py`, `normal.py`, `laplace.py`, `uniform.py`). This makes it easier to add and use different proposal mechanisms (e.g., Normal, Laplace, UniformRadius) with the `RandomWalkMH_GPU_Optimized` algorithm. Imports in `algorithms/rwm_gpu_optimized.py` and `interfaces/simulation_gpu.py` have been updated to use this new system. The `interfaces/proposals.py` file has been removed.
+*   (Other changes...) 
