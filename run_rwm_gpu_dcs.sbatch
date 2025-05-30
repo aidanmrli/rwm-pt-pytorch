@@ -23,7 +23,6 @@ mkdir -p logs
 # Activate the environment
 . /mfs1/u/$USER/envs/rwm
 
-# Set the seed based on the SLURM array task ID
 #### OPTIONS for target distribution: 
 # MultivariateNormal, MultivariateNormalScaled
 # RoughCarpet, RoughCarpetScaled, 
@@ -36,13 +35,13 @@ TARGET_DISTRIBUTION="MultivariateNormal"
 
 #### OPTIONS for proposal distribution:
 # Normal, Laplace, UniformRadius
-PROPOSAL_DISTRIBUTION="UniformRadius" # Default proposal
+PROPOSAL_DISTRIBUTION="Laplace" # Default proposal
 
 python experiment_RWM_GPU.py \
     --target $TARGET_DISTRIBUTION \
     --proposal $PROPOSAL_DISTRIBUTION \
-    --dim 30 \
-    --num_iters 1000 \
+    --dim 2 \
+    --num_iters 200000 \
     --var_max 4 \
     --burn_in 1000 \
     --hybrid_rosenbrock_n1 3 \
