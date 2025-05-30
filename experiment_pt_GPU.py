@@ -223,14 +223,10 @@ def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max
             seed=seed,
             burn_in=burn_in,
             device=device,
-            beta_ladder=constructed_beta_ladder,
+            beta_ladder=None, # construct it each new target swap rate
             swap_acceptance_rate=target_swap_rate,
             iterative_temp_spacing=True  # Use iterative ladder construction as default
         )
-        
-        # Get the constructed beta ladder from the first simulation to reuse
-        if constructed_beta_ladder is None:
-            constructed_beta_ladder = simulation.algorithm.beta_ladder
         
         chain = simulation.generate_samples(progress_bar=False)
         
@@ -253,7 +249,6 @@ def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max
     print(f"   Maximum ESJD: {max_esjd:.6f}")
     print(f"   (Actual) Swap acceptance rate corresponding to maximum ESJD: {max_actual_acceptance_rate:.3f}")
     print(f"   (Construction) Swap acceptance rate value corresponding to maximum ESJD: {max_constr_acceptance_rate:.3f}")
-    print(f"   Beta ladder used: {[f'{b:.3f}' for b in constructed_beta_ladder]}")
     
     # Save results
     data = {
@@ -269,7 +264,6 @@ def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max
         'acceptance_rates': acceptance_rates,
         'swap_acceptance_rates_range': swap_acceptance_rates_range.tolist(),
         'times': times,
-        'beta_ladder': constructed_beta_ladder
     }
     
     filename = f"data/{target_name}_PT_GPU_dim{actual_dim}_{num_iters}iters_seed{seed}.json"
@@ -292,7 +286,7 @@ def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max
         seed=seed,
         burn_in=burn_in,
         device=device,
-        beta_ladder=constructed_beta_ladder,
+        beta_ladder=None,
         swap_acceptance_rate=max_constr_acceptance_rate,
         iterative_temp_spacing=True  # Use iterative ladder construction as default
     )

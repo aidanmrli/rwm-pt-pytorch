@@ -567,7 +567,7 @@ class ParallelTemperingRWM_GPU_Optimized(MHAlgorithm):
         )
         
         # Step 6: Attempt swaps if needed
-        if should_swap:
+        if should_swap and self.step_counter > self.burn_in:
             self._attempt_all_swaps()
         
         # Step 7: Store states in chains
