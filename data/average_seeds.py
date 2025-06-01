@@ -147,7 +147,7 @@ def average_experiment_data(file_paths: List[str]) -> Dict[str, Any]:
             averaged_data[field] = average_numeric_values(values)
     
     # Average array values
-    array_fields = ['expected_squared_jump_distances', 'acceptance_rates']
+    array_fields = ['expected_squared_jump_distances', 'acceptance_rates', 'swap_acceptance_rates_range']
     for field in array_fields:
         if field in reference_data:
             arrays = [data[field] for data in all_data if field in data]

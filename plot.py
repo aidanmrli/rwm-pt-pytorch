@@ -38,7 +38,7 @@ def create_plot(data, filename):
     plt.ylabel('ESJD')
     plt.title(f'ESJD vs acceptance rate (dim={dim})')
     plt.legend()
-    output_filename = f"images/averaged/ESJD_vs_acceptance_rate_{os.path.splitext(filename)[0]}.png"
+    output_filename = f"images/averaged/{os.path.splitext(filename)[0]}.png"
     plt.savefig(output_filename, dpi=300, bbox_inches='tight')
     plt.clf()
     plt.close()
