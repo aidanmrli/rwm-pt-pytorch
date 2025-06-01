@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=bash
 #SBATCH --partition="a40,rtx6000,t4v1,t4v2"
-#SBATCH --qos=m4
-#SBATCH --time=01:59:00
+#SBATCH --qos=m5
+#SBATCH --time=00:59:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
@@ -38,7 +38,7 @@ python experiment_RWM_GPU.py \
     --proposal $PROPOSAL_DISTRIBUTION \
     --dim 2 \
     --num_iters 200000 \
-    --var_max 4 \
+    --var_max 7 \
     --burn_in 1000 \
     --hybrid_rosenbrock_n1 3 \
     --hybrid_rosenbrock_n2 2 \

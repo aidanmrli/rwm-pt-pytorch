@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=bash
 #SBATCH --partition="a40,rtx6000,t4v1,t4v2"
-#SBATCH --qos=m4
-#SBATCH --time=01:59:00
+#SBATCH --qos=m2
+#SBATCH --time=07:59:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
@@ -25,8 +25,8 @@ source /h/liaidan/random-walk-metropolis/venv/bin/activate
 # ThreeMixture, ThreeMixtureScaled, 
 # IIDGamma, IIDBeta, Hypercube
 # FullRosenbrock, EvenRosenbrock, HybridRosenbrock
-TARGET_DISTRIBUTION="MultivariateNormal"
-DIM=30
+TARGET_DISTRIBUTION="ThreeMixture"
+DIM=10
 
 python experiment_pt_GPU.py \
     --target $TARGET_DISTRIBUTION \
