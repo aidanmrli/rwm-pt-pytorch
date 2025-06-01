@@ -135,31 +135,35 @@ class IIDBetaTorch(TorchTargetDistribution):
     """
     PyTorch-native product of IID Beta distributions with full GPU acceleration.
     No CPU-GPU transfers during density evaluation.
+    
+    The density of this target distribution is given by the product of d independent Beta distributions:
+    f(x) = \prod_{i=1}^d \frac{1}{B(\alpha, \beta)} x_i^{\alpha-1} (1-x_i)^{\beta-1}
+    where B(\alpha, \beta) is the Beta function.
     """
 
-    def __init__(self, dim, alpha=2.0, beta_param=3.0, device=None):
+    def __init__(self, dim, alpha=2.0, beta=3.0, device=None):
         """
         Initialize the PyTorch-native IIDBeta distribution.
 
         Args:
             dim: Dimension of the distribution
             alpha: Alpha (shape1) parameter of the Beta distribution
-            beta_param: Beta (shape2) parameter of the Beta distribution
+            beta: Beta (shape2) parameter of the Beta distribution
             device: PyTorch device for GPU acceleration
         """
         super().__init__(dim, device)
         self.name = "IIDBetaTorch"
         
         # Store parameters as tensors on the device
-        # Note: using beta_param to avoid confusion with temperature parameter beta
+        # Note: using beta to avoid confusion with temperature parameter beta
         self.alpha = torch.tensor(alpha, device=self.device, dtype=torch.float32)
-        self.beta_param = torch.tensor(beta_param, device=self.device, dtype=torch.float32)
+        self.beta = torch.tensor(beta, device=self.device, dtype=torch.float32)
         
         # Pre-compute log normalization constant for single Beta distribution
         # log(Gamma(alpha + beta)) - log(Gamma(alpha)) - log(Gamma(beta))
         self.log_gamma_alpha = torch.lgamma(self.alpha)
-        self.log_gamma_beta = torch.lgamma(self.beta_param)
-        self.log_gamma_alpha_beta = torch.lgamma(self.alpha + self.beta_param)
+        self.log_gamma_beta = torch.lgamma(self.beta)
+        self.log_gamma_alpha_beta = torch.lgamma(self.alpha + self.beta)
         self.log_norm_const_1d = self.log_gamma_alpha_beta - self.log_gamma_alpha - self.log_gamma_beta
         
         # For d-dimensional product: d * log_norm_const_1d
@@ -215,24 +219,24 @@ class IIDBetaTorch(TorchTargetDistribution):
             # Single point: shape (dim,)
             # log(x^(alpha-1) * (1-x)^(beta-1)) = (alpha-1) * log(x) + (beta-1) * log(1-x)
             log_density = torch.sum((self.alpha - 1) * torch.log(x) + 
-                                  (self.beta_param - 1) * torch.log(1 - x)) + self.log_norm_const
+                                  (self.beta - 1) * torch.log(1 - x)) + self.log_norm_const
             return log_density
         else:
             # Batch: shape (batch_size, dim)
             # Sum over dimensions for each sample
             log_densities = torch.sum((self.alpha - 1) * torch.log(x) + 
-                                    (self.beta_param - 1) * torch.log(1 - x), dim=1) + self.log_norm_const
+                                    (self.beta - 1) * torch.log(1 - x), dim=1) + self.log_norm_const
             return log_densities
 
     def draw_sample(self, beta_temp=1.0):
         """Draw a sample from the distribution (CPU implementation for compatibility)."""
         # Convert to numpy for compatibility with existing code
         alpha_np = self.alpha.cpu().numpy()
-        beta_param_np = self.beta_param.cpu().numpy()
+        beta_np = self.beta.cpu().numpy()
         
         # Adjust parameters by beta (inverse temperature)
         adjusted_alpha = alpha_np * beta_temp
-        adjusted_beta = beta_param_np * beta_temp
+        adjusted_beta = beta_np * beta_temp
         
         return np.random.beta(adjusted_alpha, adjusted_beta, self.dim)
     
@@ -249,7 +253,7 @@ class IIDBetaTorch(TorchTargetDistribution):
         """
         # Adjust parameters by beta
         adjusted_alpha = self.alpha * beta_temp
-        adjusted_beta = self.beta_param * beta_temp
+        adjusted_beta = self.beta * beta_temp
         
         # PyTorch's Beta distribution
         beta_dist = torch.distributions.Beta(adjusted_alpha, adjusted_beta)
@@ -261,7 +265,7 @@ class IIDBetaTorch(TorchTargetDistribution):
         """Move the distribution to a specific device."""
         super().to(device)
         self.alpha = self.alpha.to(device)
-        self.beta_param = self.beta_param.to(device)
+        self.beta = self.beta.to(device)
         self.log_gamma_alpha = self.log_gamma_alpha.to(device)
         self.log_gamma_beta = self.log_gamma_beta.to(device)
         self.log_gamma_alpha_beta = self.log_gamma_alpha_beta.to(device)

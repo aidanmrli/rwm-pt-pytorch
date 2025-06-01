@@ -17,7 +17,28 @@ class MHAlgorithm:
         self.dim = dim
         self.var = var
         self.target_dist = target_dist
-        self.chain = [0.01 * np.random.randn(dim)]
+        
+        # MODIFIED: Check for Beta distribution to initialize within (0,1) domain
+        if hasattr(target_dist, 'name') and isinstance(target_dist.name, str) and "Beta" in target_dist.name:
+            # Initialize within (0.1, 0.9) to be safely away from boundaries
+            initial_point = np.random.uniform(0.2, 0.8, size=dim).astype(np.float32)
+            self.chain = [initial_point]
+        elif hasattr(target_dist, 'get_name') and callable(target_dist.get_name) and isinstance(target_dist.get_name(), str) and "Beta" in target_dist.get_name():
+            # Alternative check if name is a method
+            initial_point = np.random.uniform(0.2, 0.8, size=dim).astype(np.float32)
+            self.chain = [initial_point]
+        if hasattr(target_dist, 'name') and isinstance(target_dist.name, str) and "Gamma" in target_dist.name:
+            # Initialize within (0.1, 0.9) to be safely away from boundaries
+            initial_point = 5 + 0.01 * np.random.randn(dim)
+            self.chain = [initial_point]
+        elif hasattr(target_dist, 'get_name') and callable(target_dist.get_name) and isinstance(target_dist.get_name(), str) and "Gamma" in target_dist.get_name():
+            # Alternative check if name is a method
+            # initialize with random noise around 5 for all dimensions
+            initial_point = 5 + 0.01 * np.random.randn(dim)
+            self.chain = [initial_point]
+        else:
+            self.chain = [0.01 * np.random.randn(dim)]
+            
         self.symmetric = symmetric
         self.num_acceptances = 0    # use this to calculate acceptance rate
         self.acceptance_rate = 0
