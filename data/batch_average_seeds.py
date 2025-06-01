@@ -134,12 +134,6 @@ def process_pattern_group(pattern: str, file_paths: List[str], output_dir: str, 
         output_filename = generate_output_filename(pattern, seeds)
         output_path = os.path.join(output_dir, output_filename)
         
-        # Check if output file already exists
-        if os.path.exists(output_path):
-            if verbose:
-                print(f"  Output file already exists: {output_filename}")
-            return True
-        
         # Save averaged data
         save_json(averaged_data, output_path)
         
