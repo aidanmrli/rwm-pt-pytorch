@@ -34,6 +34,10 @@ python experiment_pt_GPU.py \
     --num_iters 200000 \
     --swap_accept_max 0.5 \
     --burn_in 1000 \
+    --N_samples_swap_est 1000000 \
+    --iterative_tolerance 0.0001 \
+    --iterative_max_pn_steps 1000 \
+    --iterative_fail_tol_factor 1 \
     --seed $SLURM_ARRAY_TASK_ID
 
 echo "Completed PT study on VI for target $TARGET_DISTRIBUTION, dim $DIM, seed $SLURM_ARRAY_TASK_ID" 

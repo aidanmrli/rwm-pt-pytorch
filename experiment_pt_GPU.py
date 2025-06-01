@@ -162,7 +162,9 @@ def get_target_distribution(name, dim, use_torch=True, device=None, **kwargs):
         else:
             raise ValueError("Unknown target distribution name")
 
-def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max=0.5, seed=42, burn_in=1000, **kwargs):
+def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max=0.5, seed=42, burn_in=1000, 
+              N_samples_swap_est=50000, iterative_tolerance=0.0005, iterative_max_pn_steps=500, 
+              iterative_fail_tol_factor=1.5, use_double_precision=False, **kwargs):
     """Run many parallel tempering simulations with different swap acceptance rates, then save and plot the progression of ESJD and acceptance rate."""
     
     # Set device explicitly
@@ -225,7 +227,13 @@ def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max
             device=device,
             beta_ladder=None, # construct it each new target swap rate
             swap_acceptance_rate=target_swap_rate,
-            iterative_temp_spacing=True  # Use iterative ladder construction as default
+            iterative_temp_spacing=True,  # Use iterative ladder construction as default
+            # HIGH PRECISION PARAMETERS FOR ITERATIVE LADDER CONSTRUCTION:
+            N_samples_swap_est=N_samples_swap_est,
+            iterative_tolerance=iterative_tolerance,
+            iterative_max_pn_steps=iterative_max_pn_steps,
+            iterative_fail_tol_factor=iterative_fail_tol_factor,
+            dtype=torch.float64 if use_double_precision else torch.float32
         )
         
         chain = simulation.generate_samples(progress_bar=False)
@@ -288,7 +296,13 @@ def run_study(dim, target_name="ThreeMixture", num_iters=100000, swap_accept_max
         device=device,
         beta_ladder=None,
         swap_acceptance_rate=max_constr_acceptance_rate,
-        iterative_temp_spacing=True  # Use iterative ladder construction as default
+        iterative_temp_spacing=True,  # Use iterative ladder construction as default
+        # HIGH PRECISION PARAMETERS FOR ITERATIVE LADDER CONSTRUCTION:
+        N_samples_swap_est=N_samples_swap_est,
+        iterative_tolerance=iterative_tolerance,
+        iterative_max_pn_steps=iterative_max_pn_steps,
+        iterative_fail_tol_factor=iterative_fail_tol_factor,
+        dtype=torch.float64 if use_double_precision else torch.float32
     )
     
     traceplot_chain = traceplot_simulation.generate_samples(progress_bar=False)
@@ -503,6 +517,13 @@ if __name__ == "__main__":
     parser.add_argument("--super_funnel_prior_hypermean_std", type=float, default=10.0, help="Prior hypermean std for SuperFunnel")
     parser.add_argument("--super_funnel_prior_tau_scale", type=float, default=2.5, help="Prior tau scale for SuperFunnel")
     
+    # High-precision iterative ladder construction parameters
+    parser.add_argument("--N_samples_swap_est", type=int, default=50000, help="Number of samples for swap estimation in iterative ladder construction")
+    parser.add_argument("--iterative_tolerance", type=float, default=0.0005, help="Tolerance for iterative ladder construction")
+    parser.add_argument("--iterative_max_pn_steps", type=int, default=500, help="Maximum pn adjustment steps in iterative ladder construction")
+    parser.add_argument("--iterative_fail_tol_factor", type=float, default=1, help="Tolerance factor on convergence failure")
+    parser.add_argument("--use_double_precision", action="store_true", help="Use double precision (float64) for numerical stability")
+    
     args = parser.parse_args()
     
     if torch.cuda.is_available():
@@ -527,5 +548,7 @@ if __name__ == "__main__":
         kwargs['prior_hypermean_std'] = args.super_funnel_prior_hypermean_std
         kwargs['prior_tau_scale'] = args.super_funnel_prior_tau_scale
     
-    results = run_study(args.dim, args.target, args.num_iters, args.swap_accept_max, args.seed, args.burn_in, **kwargs)
+    results = run_study(args.dim, args.target, args.num_iters, args.swap_accept_max, args.seed, args.burn_in, 
+                        args.N_samples_swap_est, args.iterative_tolerance, args.iterative_max_pn_steps, 
+                        args.iterative_fail_tol_factor, args.use_double_precision, **kwargs)
     print(f"🎉 Finished running GPU-accelerated parallel tempering experiment.") 
