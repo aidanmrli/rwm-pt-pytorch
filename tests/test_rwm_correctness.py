@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Test script to verify Standard RWM GPU implementation correctness.
-This script specifically tests that the standard_rwm=True mode produces correct MCMC behavior.
+Test script to verify RWM GPU implementation correctness.
+This script tests that the optimized GPU implementation produces correct MCMC behavior.
 """
 
 import sys
@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
 import numpy as np
 import time
-from algorithms.rwm_gpu import RandomWalkMH_GPU
 from algorithms.rwm import RandomWalkMH
 from algorithms.rwm_gpu_optimized import RandomWalkMH_GPU_Optimized, ultra_fused_mcmc_step_basic
 from target_distributions import MultivariateNormal, MultivariateNormalTorch
@@ -21,8 +20,8 @@ from target_distributions import NealFunnelTorch, SuperFunnelTorch
 import matplotlib.pyplot as plt
 
 def test_standard_rwm_correctness():
-    """Test that standard RWM implementation is theoretically correct."""
-    print("🧪 Testing Standard RWM Correctness...")
+    """Test that optimized RWM implementation is theoretically correct."""
+    print("🧪 Testing RWM Correctness...")
     
     # Test parameters - use simple 2D Gaussian for easy verification
     dim = 2
@@ -30,22 +29,13 @@ def test_standard_rwm_correctness():
     variance = 0.5  # Moderate proposal variance
     
     try:
-        # Test 1: Standard RWM should match CPU implementation closely
-        print("   🔍 Test 1: Comparing Standard RWM GPU vs CPU...")
+        # Test 1: GPU Optimized RWM should match CPU implementation closely
+        print("   🔍 Test 1: Comparing GPU Optimized vs CPU...")
         
         target_cpu = MultivariateNormal(dim)
         target_gpu = MultivariateNormalTorch(dim)
         
         rwm_cpu = RandomWalkMH(dim, variance, target_cpu)
-        rwm_gpu_std = RandomWalkMH_GPU(
-            dim=dim, 
-            var=variance, 
-            target_dist=target_gpu,
-            standard_rwm=True,
-            symmetric=True,
-            pre_allocate_steps=num_samples,
-            device='cuda' if torch.cuda.is_available() else 'cpu'
-        )
         rwm_gpu_opt = RandomWalkMH_GPU_Optimized(
             dim=dim, 
             var=variance, 
@@ -64,42 +54,25 @@ def test_standard_rwm_correctness():
         cpu_chain = np.array(rwm_cpu.chain)
         cpu_acc_rate = rwm_cpu.acceptance_rate
         
-        gpu_chain_std = rwm_gpu_std.generate_samples(num_samples)
-        gpu_acc_rate_std = rwm_gpu_std.acceptance_rate
-        
         gpu_chain_opt = rwm_gpu_opt.generate_samples(num_samples)
         gpu_acc_rate_opt = rwm_gpu_opt.acceptance_rate
         
         # Compare acceptance rates (should be very close)
-        gpustd_cpu_acc_rate_diff = abs(cpu_acc_rate - gpu_acc_rate_std)
         gpuopt_cpu_acc_rate_diff = abs(cpu_acc_rate - gpu_acc_rate_opt)
         print(f"      CPU acceptance rate: {cpu_acc_rate:.4f}")
-        print(f"      GPU standard acceptance rate: {gpu_acc_rate_std:.4f}")
         print(f"      GPU optimized acceptance rate: {gpu_acc_rate_opt:.4f}")
-        print(f"      GPU-CPU Difference: {gpustd_cpu_acc_rate_diff:.4f}")
         print(f"      GPU(Opt)-CPU Difference: {gpuopt_cpu_acc_rate_diff:.4f}")
         
-        test1_pass = gpustd_cpu_acc_rate_diff < 0.1 and gpuopt_cpu_acc_rate_diff < 0.1 # Allow 10% difference due to random seed differences
+        test1_pass = gpuopt_cpu_acc_rate_diff < 0.1 # Allow 10% difference due to random seed differences
         if test1_pass:
             print(f"   ✅ Acceptance rates are consistent")
         else:
             print(f"   ⚠️  Large acceptance rate difference detected")
         
-        # Test 3: Statistical properties for standard RWM
-        print("   🔍 Test 3: Statistical properties of standard RWM...")
+        # Test 3: Statistical properties for optimized RWM
+        print("   🔍 Test 3: Statistical properties of optimized RWM...")
         
         # For 2D standard Gaussian, mean should be ~[0,0] and std ~[1,1]
-        gpu_mean = torch.mean(gpu_chain_std[1000:], axis=0)  # Skip burn-in
-        gpu_std = torch.std(gpu_chain_std[1000:], axis=0)
-        
-        mean_error = torch.norm(gpu_mean)
-        std_error = torch.norm(gpu_std - 1.0)
-        
-        print(f"      GPU standard Empirical mean: {gpu_mean}")
-        print(f"      GPU standard Empirical std: {gpu_std}")
-        print(f"      GPU standard Mean error (should be ~0): {mean_error:.4f}")
-        print(f"      GPU standard Std error (should be ~0): {std_error:.4f}")
-        
         gpu_mean_opt = torch.mean(gpu_chain_opt[1000:], axis=0)  # Skip burn-in
         gpu_std_opt = torch.std(gpu_chain_opt[1000:], axis=0)
         
@@ -111,7 +84,7 @@ def test_standard_rwm_correctness():
         print(f"      GPU optimized Mean error (should be ~0): {mean_error_opt:.4f}")
         print(f"      GPU optimized Std error (should be ~0): {std_error_opt:.4f}")
         
-        test3_pass = mean_error < 0.2 and std_error < 0.3 and mean_error_opt < 0.2 and std_error_opt < 0.3
+        test3_pass = mean_error_opt < 0.2 and std_error_opt < 0.3
         if test3_pass:
             print(f"   ✅ Statistical properties look good")
         else:
@@ -119,17 +92,6 @@ def test_standard_rwm_correctness():
         
         # Test 4: Chain should have proper sequential dependence
         print("   🔍 Test 4: Testing sequential dependence...")
-        
-        # Compute lag-1 autocorrelation (should be positive and reasonable)
-        chain_centered = gpu_chain_std[1000:] - gpu_mean
-        # Stack the lag-0 and lag-1 values as rows for torch.corrcoef
-        x_data = torch.stack([chain_centered[:-1, 0], chain_centered[1:, 0]], dim=0)
-        y_data = torch.stack([chain_centered[:-1, 1], chain_centered[1:, 1]], dim=0)
-        autocorr_x = torch.corrcoef(x_data)[0, 1]
-        autocorr_y = torch.corrcoef(y_data)[0, 1]
-        
-        print(f"      GPU standard Lag-1 autocorrelation X: {autocorr_x:.4f}")
-        print(f"      GPU standard Lag-1 autocorrelation Y: {autocorr_y:.4f}")
         
         # Compute lag-1 autocorrelation (should be positive and reasonable)
         chain_centered = gpu_chain_opt[1000:] - gpu_mean_opt
@@ -143,7 +105,7 @@ def test_standard_rwm_correctness():
         print(f"      GPU optimized Lag-1 autocorrelation Y: {autocorr_y_opt:.4f}")
         
         # For RWM, autocorrelation should be positive (around 0.2-0.8)
-        test4_pass = (0.05 < autocorr_x < 0.95 and 0.05 < autocorr_y < 0.95) and (0.05 < autocorr_x_opt < 0.95 and 0.05 < autocorr_y_opt < 0.95)
+        test4_pass = (0.05 < autocorr_x_opt < 0.95 and 0.05 < autocorr_y_opt < 0.95)
         if test4_pass:
             print(f"   ✅ Autocorrelation looks reasonable for MCMC")
         else:
@@ -151,38 +113,6 @@ def test_standard_rwm_correctness():
         
         # Test 5: Sequential nature test - check that proposals depend on previous state
         print("   🔍 Test 5: Testing true sequential nature...")
-        
-        # Reset and manually check a few steps for standard GPU
-        rwm_test = RandomWalkMH_GPU(
-            dim=2, 
-            var=0.1,  # Small variance for clear dependence
-            target_dist=MultivariateNormalTorch(2),
-            standard_rwm=True,
-            device='cuda' if torch.cuda.is_available() else 'cpu'
-        )
-        
-        # Take 3 steps and check each depends on previous
-        torch.manual_seed(123)
-        np.random.seed(123)
-        
-        step1_before = rwm_test.current_state.clone() if rwm_test.current_state is not None else None
-        rwm_test._standard_step()
-        step1_after = rwm_test.current_state.clone()
-        
-        step2_before = rwm_test.current_state.clone()
-        rwm_test._standard_step()
-        step2_after = rwm_test.current_state.clone()
-        
-        step3_before = rwm_test.current_state.clone()
-        rwm_test._standard_step()
-        step3_after = rwm_test.current_state.clone()
-        
-        # Verify sequential dependence for standard GPU
-        sequential_ok = True
-        if not torch.allclose(step2_before, step1_after, atol=1e-6):
-            sequential_ok = False
-        if not torch.allclose(step3_before, step2_after, atol=1e-6):
-            sequential_ok = False
         
         # Test optimized GPU version for sequential dependence
         rwm_test_opt = RandomWalkMH_GPU_Optimized(
@@ -216,28 +146,25 @@ def test_standard_rwm_correctness():
         if not torch.allclose(opt_step3_before, opt_step2_after, atol=1e-6):
             sequential_ok_opt = False
         
-        test5_pass = sequential_ok and sequential_ok_opt
+        test5_pass = sequential_ok_opt
         if test5_pass:
-            print(f"   ✅ Sequential dependence verified for both GPU implementations")
+            print(f"   ✅ Sequential dependence verified for GPU implementation")
         else:
             print(f"   ❌ Sequential dependence failed!")
-            if not sequential_ok:
-                print(f"       Standard GPU failed sequential test")
-            if not sequential_ok_opt:
-                print(f"       Optimized GPU failed sequential test")
+            print(f"       Optimized GPU failed sequential test")
         
         # Overall result
         all_tests_pass = test1_pass and test3_pass and test4_pass and test5_pass
         
         if all_tests_pass:
-            print(f"   🎉 All Standard RWM correctness tests passed!")
+            print(f"   🎉 All RWM correctness tests passed!")
         else:
             print(f"   ⚠️  Some tests failed - check individual results above")
         
         return all_tests_pass
         
     except Exception as e:
-        print(f"   ❌ Standard RWM correctness test failed: {e}")
+        print(f"   ❌ RWM correctness test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -409,8 +336,8 @@ def test_gpu_optimized_jit_kernels():
         return False
 
 def test_performance_comparison():
-    """Compare all three implementations: CPU, GPU standard, and GPU optimized."""
-    print("\n⚡ Performance Comparison: CPU vs GPU Standard vs GPU Optimized...")
+    """Compare CPU and GPU optimized implementations."""
+    print("\n⚡ Performance Comparison: CPU vs GPU Optimized...")
     
     dim = 10
     num_samples = 10000
@@ -433,29 +360,9 @@ def test_performance_comparison():
         results['CPU'] = {'time': cpu_time, 'acc_rate': cpu_acc}
         print(f"      Time: {cpu_time:.2f}s, Acc: {cpu_acc:.3f}, Rate: {num_samples/cpu_time:.0f} samples/s")
         
-        # GPU standard test
-        print("   🚀 Testing GPU standard RWM...")
-        target_gpu = MultivariateNormalTorch(dim)
-        
-        gpu_start = time.time()
-        rwm_gpu = RandomWalkMH_GPU(
-            dim=dim,
-            var=variance,
-            target_dist=target_gpu,
-            standard_rwm=True,  # True standard RWM
-            pre_allocate_steps=num_samples,
-            device='cuda' if torch.cuda.is_available() else 'cpu'
-        )
-        
-        gpu_chain = rwm_gpu.generate_samples(num_samples)
-        gpu_time = time.time() - gpu_start
-        gpu_acc = rwm_gpu.acceptance_rate
-        
-        results['GPU_Standard'] = {'time': gpu_time, 'acc_rate': gpu_acc}
-        print(f"      Time: {gpu_time:.2f}s, Acc: {gpu_acc:.3f}, Rate: {num_samples/gpu_time:.0f} samples/s")
-        
         # GPU optimized test
         print("   🔥 Testing GPU optimized (JIT) RWM...")
+        target_gpu = MultivariateNormalTorch(dim)
         
         gpu_opt_start = time.time()
         rwm_gpu_opt = RandomWalkMH_GPU_Optimized(
@@ -487,14 +394,11 @@ def test_performance_comparison():
         acc_rates = [r['acc_rate'] for r in results.values()]
         acc_rate_range = max(acc_rates) - min(acc_rates)
         
-        gpu_std_speedup = baseline_time / results['GPU_Standard']['time']
         gpu_opt_speedup = baseline_time / results['GPU_Optimized']['time']
         
         print(f"\n   🎯 Analysis:")
         print(f"      Acceptance rate consistency: {acc_rate_range:.4f} (should be < 0.05)")
-        print(f"      GPU Standard speedup: {gpu_std_speedup:.2f}x")
         print(f"      GPU Optimized speedup: {gpu_opt_speedup:.2f}x")
-        print(f"      Optimized vs Standard: {gpu_opt_speedup/gpu_std_speedup:.2f}x additional gain")
         
         # Performance criteria
         performance_ok = True
@@ -505,16 +409,16 @@ def test_performance_comparison():
         # More lenient performance criteria for CPU execution
         device_type = 'cuda' if torch.cuda.is_available() else 'cpu'
         if device_type == 'cpu':
-            # On CPU, just check that optimized version is not dramatically slower
-            if gpu_opt_speedup < gpu_std_speedup * 0.3:  # Allow optimized to be slower on CPU
-                print(f"   ⚠️  GPU optimized much slower than expected vs standard on CPU")
+            # On CPU, just check that optimized version is reasonable
+            if gpu_opt_speedup < 0.1:  # Should not be dramatically slower
+                print(f"   ⚠️  GPU optimized much slower than expected on CPU")
                 performance_ok = False
             else:
                 print(f"   ✅ Performance acceptable for CPU execution")
         else:
-            # On GPU, optimized should be competitive
-            if gpu_opt_speedup < gpu_std_speedup * 0.8:
-                print(f"   ⚠️  GPU optimized slower than expected vs standard")
+            # On GPU, optimized should provide speedup
+            if gpu_opt_speedup < 1.0:
+                print(f"   ⚠️  GPU optimized slower than CPU")
                 performance_ok = False
         
         if performance_ok:
@@ -531,8 +435,8 @@ def test_performance_comparison():
         return False
 
 def test_device_fallback():
-    """Test that all implementations work on both GPU and CPU."""
-    print("\n🔧 Testing Device Fallback for All Implementations...")
+    """Test that the optimized implementation works on both GPU and CPU."""
+    print("\n🔧 Testing Device Fallback for GPU Optimized Implementation...")
     
     dim = 3
     num_samples = 100
@@ -545,7 +449,6 @@ def test_device_fallback():
         devices_to_test.append('cuda')
     
     implementations = {
-        'GPU_Standard': RandomWalkMH_GPU,
         'GPU_Optimized': RandomWalkMH_GPU_Optimized
     }
     
@@ -559,24 +462,14 @@ def test_device_fallback():
             try:
                 print(f"      Testing {impl_name}...")
                 
-                if impl_name == 'GPU_Optimized':
-                    rwm = impl_class(
-                        dim=dim,
-                        var=variance,
-                        target_dist=target_dist_gpu,
-                        device=device,
-                        pre_allocate_steps=num_samples,
-                        use_efficient_rng=True
-                    )
-                else:
-                    rwm = impl_class(
-                        dim=dim,
-                        var=variance,
-                        target_dist=target_dist_gpu,
-                        standard_rwm=True,
-                        pre_allocate_steps=num_samples,
-                        device=device
-                    )
+                rwm = impl_class(
+                    dim=dim,
+                    var=variance,
+                    target_dist=target_dist_gpu,
+                    device=device,
+                    pre_allocate_steps=num_samples,
+                    use_efficient_rng=True
+                )
                 
                 chain = rwm.generate_samples(num_samples)
                 
@@ -606,7 +499,7 @@ def test_device_fallback():
     print(f"\n   📊 Fallback Summary: {successful_tests}/{total_tests} tests passed")
     
     if successful_tests == total_tests:
-        print(f"   ✅ All implementations work on all available devices")
+        print(f"   ✅ Implementation works on all available devices")
         return True
     elif successful_tests > 0:
         print(f"   ⚠️  Some implementations failed on some devices")
@@ -969,8 +862,8 @@ def test_comprehensive_target_distributions():
         return False
 
 def main():
-    """Run all standard RWM tests."""
-    print("🚀 Standard RWM GPU Implementation Test Suite")
+    """Run all RWM tests."""
+    print("🚀 RWM GPU Implementation Test Suite")
     print("=" * 60)
     
     # Check GPU availability
@@ -981,7 +874,7 @@ def main():
     
     # Run tests
     tests = [
-        ("Standard RWM Correctness", test_standard_rwm_correctness),
+        ("RWM Correctness", test_standard_rwm_correctness),
         ("GPU Optimized JIT Kernels", test_gpu_optimized_jit_kernels),
         ("Performance Comparison", test_performance_comparison),
         ("Device Fallback", test_device_fallback),
@@ -1014,10 +907,10 @@ def main():
     print(f"\n🎯 Overall: {passed}/{len(results)} tests passed")
     
     if passed == len(results):
-        print("\n🎉 All tests passed! Your Standard RWM GPU implementation is correct.")
-        print("💡 You can confidently use standard_rwm=True for research.")
+        print("\n🎉 All tests passed! Your RWM GPU implementation is correct.")
+        print("💡 You can confidently use the optimized GPU implementation for research.")
     else:
-        print("\n⚠️  Some tests failed. Standard RWM implementation may need fixes.")
+        print("\n⚠️  Some tests failed. RWM implementation may need fixes.")
     
     return passed == len(results)
 

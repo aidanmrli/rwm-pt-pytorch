@@ -417,7 +417,7 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
         Returns:
             Chain of samples as a torch tensor (EXCLUDING burn-in samples)
         """
-        print(f"Generating {num_samples} samples (+ {self.burn_in} burn-in) using ultra-optimized GPU RWM")
+        print(f"Generating {num_samples} samples (+ {self.burn_in} burn-in) using GPU RWM")
         print("Note: Steps processed sequentially (required for RWM dependency chain)")
         
         # Pre-compute ALL random numbers for maximum efficiency
@@ -427,9 +427,10 @@ class RandomWalkMH_GPU_Optimized(MHAlgorithm):
         
         # Track if we need to add initial state to avoid double-counting
         initial_state_added = False
-        
         # Initialize if needed
         if self.current_state is None:
+            print(f"Initial state: {self.chain[-1]}")
+            print(f"Target density at the initial state: {torch.exp(self.target_dist.log_density(torch.tensor(self.chain[-1], device=self.device, dtype=self.dtype)))}")
             self.current_state = torch.tensor(
                 self.chain[-1], device=self.device, dtype=self.dtype
             )

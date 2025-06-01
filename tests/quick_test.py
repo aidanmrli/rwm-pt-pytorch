@@ -10,8 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     print("Testing imports...")
-    from algorithms.rwm_gpu import RandomWalkMH_GPU
     from algorithms.rwm import RandomWalkMH
+    from algorithms.rwm_gpu_optimized import RandomWalkMH_GPU_Optimized
     from target_distributions import MultivariateNormal, MultivariateNormalTorch
     # Test new funnel distributions
     from target_distributions import NealFunnelTorch, SuperFunnelTorch
@@ -36,7 +36,7 @@ try:
     super_funnel_dist = SuperFunnelTorch(J, K, X_data, Y_data)
     print(f"✅ Created Super Funnel: {super_funnel_dist.get_name()}")
     
-    rwm_gpu = RandomWalkMH_GPU(
+    rwm_gpu = RandomWalkMH_GPU_Optimized(
         dim=2,
         var=1.0,
         target_dist=target_dist_gpu,
