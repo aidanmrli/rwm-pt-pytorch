@@ -1,0 +1,15 @@
+{
+  "target_distribution": "EvenRosenbrock",
+  "dimension": 20,
+  "num_iterations": 100000,
+  "proposal_name": "Normal",
+  "proposal_config_params": {
+    "base_variance_scalar": 0.018
+  },
+  "seed": 42,
+  "simulation_time": 28.67714762687683,
+  "acceptance_rate": 0.04997,
+  "esjd": 0.014897690154612064,
+  "burn_in": 1000,
+  "device_used": "cuda"
+}
