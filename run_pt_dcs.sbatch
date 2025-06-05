@@ -9,7 +9,7 @@
 #SBATCH --mem=20G
 #SBATCH --gres=gpu:1
 #SBATCH --nodelist=quartet[1-3,5],dgx1,sonata2,bulbasaur,charmander,squirtle
-#SBATCH --array=1-20%10
+#SBATCH --array=1-20
 #SBATCH --output=logs/pt_dcs_%j.out
 #SBATCH --error=logs/pt_dcs_%j.err
 
@@ -29,12 +29,12 @@ mkdir -p logs
 # ThreeMixture, ThreeMixtureScaled, 
 # IIDGamma, IIDBeta, Hypercube
 # FullRosenbrock, EvenRosenbrock, HybridRosenbrock
-TARGET_DISTRIBUTION="RoughCarpet"
+TARGET_DISTRIBUTION="MultivariateNormal"
 
 python experiment_pt_GPU.py \
     --target $TARGET_DISTRIBUTION \
-    --dim 20 \
-    --num_iters 200000 \
+    --dim 10 \
+    --num_iters 500000 \
     --swap_accept_max 0.5 \
     --burn_in 1000 \
     --N_samples_swap_est 1000000 \
