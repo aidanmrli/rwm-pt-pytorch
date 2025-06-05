@@ -69,3 +69,8 @@ python single_run_experiment.py --target HybridRosenbrock --dim 5 --normal_base_
 python single_run_experiment.py --target HybridRosenbrock --dim 9 --normal_base_variance 1.2 --num_iters 100000 --hybrid_rosenbrock_n1 5 --hybrid_rosenbrock_n2 2
 python single_run_experiment.py --target HybridRosenbrock --dim 19 --normal_base_variance 1.2 --num_iters 100000 --hybrid_rosenbrock_n1 7 --hybrid_rosenbrock_n2 3
 python single_run_experiment.py --target HybridRosenbrock --dim 29 --normal_base_variance 1.2 --num_iters 100000 --hybrid_rosenbrock_n1 8 --hybrid_rosenbrock_n2 4
+
+python single_run_experiment.py --target NealFunnel --dim 5 --normal_base_variance 9.0 --num_iters 100000 --burn_in 50000
+python single_run_experiment.py --target NealFunnel --dim 10 --normal_base_variance 8.0 --num_iters 100000 --burn_in 50000
+python single_run_experiment.py --target NealFunnel --dim 20 --normal_base_variance 6.6 --num_iters 100000 --burn_in 50000
+python single_run_experiment.py --target NealFunnel --dim 30 --normal_base_variance 4.8 --num_iters 100000 --burn_in 50000
