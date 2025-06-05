@@ -50,4 +50,22 @@ python3 experiment_RWM.py --dim 50 --var_max 0.9 --target IIDBeta --num_iters 10
 # # python3 experiment_RWM.py --dim 30 --var_max 4.0 --target ThreeMixtureScaled --num_iters 100000 --init_seed 0 --num_seeds 5
 # # python3 experiment_RWM.py --dim 50 --var_max 4.0 --target ThreeMixtureScaled --num_iters 100000 --init_seed 0 --num_seeds 5
 
-python3 experiment_RWM_GPU.py --dim 10 --var_max 1.5 --target FullRosenbrock --num_iters 100000 --init_seed 0 --num_seeds 5
+python experiment_RWM_GPU.py --dim 30 --var_max 1.5 --target FullRosenbrock --num_iters 100000
+
+python single_run_experiment.py --target FullRosenbrock --dim 2 --normal_base_variance 2.8 --num_iters 100000
+python single_run_experiment.py --target FullRosenbrock --dim 5 --normal_base_variance 1.5 --num_iters 100000
+python single_run_experiment.py --target FullRosenbrock --dim 10 --normal_base_variance 1.3 --num_iters 100000
+python single_run_experiment.py --target FullRosenbrock --dim 20 --normal_base_variance 1.3 --num_iters 100000
+python single_run_experiment.py --target FullRosenbrock --dim 30 --normal_base_variance 1.3 --num_iters 100000
+
+python single_run_experiment.py --target EvenRosenbrock --dim 2 --normal_base_variance 2.8 --num_iters 100000
+python single_run_experiment.py --target EvenRosenbrock --dim 4 --normal_base_variance 1.3 --num_iters 100000
+python single_run_experiment.py --target EvenRosenbrock --dim 10 --normal_base_variance 0.6 --num_iters 100000
+python single_run_experiment.py --target EvenRosenbrock --dim 20 --normal_base_variance 0.6 --num_iters 100000
+python single_run_experiment.py --target EvenRosenbrock --dim 30 --normal_base_variance 0.6 --num_iters 100000
+
+python single_run_experiment.py --target HybridRosenbrock --dim 3 --normal_base_variance 1.6 --num_iters 100000 --hybrid_rosenbrock_n1 2 --hybrid_rosenbrock_n2 2
+python single_run_experiment.py --target HybridRosenbrock --dim 5 --normal_base_variance 1.4 --num_iters 100000 --hybrid_rosenbrock_n1 3 --hybrid_rosenbrock_n2 2
+python single_run_experiment.py --target HybridRosenbrock --dim 9 --normal_base_variance 1.2 --num_iters 100000 --hybrid_rosenbrock_n1 5 --hybrid_rosenbrock_n2 2
+python single_run_experiment.py --target HybridRosenbrock --dim 19 --normal_base_variance 1.2 --num_iters 100000 --hybrid_rosenbrock_n1 7 --hybrid_rosenbrock_n2 3
+python single_run_experiment.py --target HybridRosenbrock --dim 29 --normal_base_variance 1.2 --num_iters 100000 --hybrid_rosenbrock_n1 8 --hybrid_rosenbrock_n2 4
