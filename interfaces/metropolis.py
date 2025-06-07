@@ -27,7 +27,7 @@ class MHAlgorithm:
             # Alternative check if name is a method
             initial_point = np.random.uniform(0.2, 0.8, size=dim).astype(np.float32)
             self.chain = [initial_point]
-        if hasattr(target_dist, 'name') and isinstance(target_dist.name, str) and "Gamma" in target_dist.name:
+        elif hasattr(target_dist, 'name') and isinstance(target_dist.name, str) and "Gamma" in target_dist.name:
             # Initialize within (0.1, 0.9) to be safely away from boundaries
             initial_point = 5 + 0.01 * np.random.randn(dim)
             self.chain = [initial_point]
