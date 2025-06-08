@@ -161,6 +161,22 @@ def average_experiment_data(file_paths: List[str]) -> Dict[str, Any]:
             values = [data[field] for data in all_data if field in data]
             averaged_data[field] = average_numeric_values(values)
     
+    # Calculate max_swap_acceptance_rate based on max ESJD
+    if 'expected_squared_jump_distances' in reference_data and 'swap_acceptance_rates_range' in reference_data:
+        swap_rates_at_max_esjd = []
+        for data in all_data:
+            esjds = data.get('expected_squared_jump_distances')
+            swap_rates = data.get('swap_acceptance_rates_range')
+            
+            if esjds and swap_rates and len(esjds) > 0 and len(esjds) == len(swap_rates):
+                # Find index of max ESJD
+                max_esjd_index = int(np.argmax(esjds))
+                # Get corresponding swap rate
+                swap_rates_at_max_esjd.append(swap_rates[max_esjd_index])
+        
+        if swap_rates_at_max_esjd:
+            averaged_data['max_swap_acceptance_rate'] = average_numeric_values(swap_rates_at_max_esjd)
+    
     # Average array values
     array_fields = ['expected_squared_jump_distances', 'acceptance_rates', 'swap_acceptance_rates_range']
     for field in array_fields:
@@ -294,6 +310,7 @@ Examples:
             print(f"Averaged seeds: {seeds}")
             print(f"Max ESJD: {averaged_data.get('max_esjd', 'N/A'):.6f}")
             print(f"Max acceptance rate: {averaged_data.get('max_acceptance_rate', 'N/A'):.6f}")
+            print(f"Max swap acceptance rate: {averaged_data.get('max_swap_acceptance_rate', 'N/A'):.6f}")
             print(f"Max variance value: {averaged_data.get('max_variance_value', 'N/A'):.6f}")
         
     except Exception as e:

@@ -141,6 +141,7 @@ def process_pattern_group(pattern: str, file_paths: List[str], output_dir: str, 
             print(f"  Successfully created: {output_filename}")
             print(f"  Averaged seeds: {seeds}")
             print(f"  Max ESJD: {averaged_data.get('max_esjd', 'N/A'):.6f}")
+            print(f"  Max swap acceptance rate: {averaged_data.get('max_swap_acceptance_rate', 'N/A'):.6f}")
         else:
             print(f"Created: {output_filename}")
         
