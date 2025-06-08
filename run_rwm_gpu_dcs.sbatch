@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
 #SBATCH --gres=gpu:1
-#SBATCH --nodelist=concerto[1-3],overture,quartet[1-3,5],dgx1,sonata2
+#SBATCH --nodelist=quartet[1-3,5],dgx1,sonata2,,bulbasaur,charmander,squirtle
 #SBATCH --array=1-20%10
 #SBATCH --output=logs/rwm_%j.out
 #SBATCH --error=logs/rwm_%j.err
@@ -31,21 +31,21 @@ mkdir -p logs
 # FullRosenbrock, EvenRosenbrock, HybridRosenbrock
 # NealFunnel, SuperFunnel
 
-TARGET_DISTRIBUTION="MultivariateNormal"
+TARGET_DISTRIBUTION="RoughCarpetScaled"
 
 #### OPTIONS for proposal distribution:
 # Normal, Laplace, UniformRadius
-PROPOSAL_DISTRIBUTION="Laplace" # Default proposal
+PROPOSAL_DISTRIBUTION="Normal" # Default proposal
 
 python experiment_RWM_GPU.py \
     --target $TARGET_DISTRIBUTION \
     --proposal $PROPOSAL_DISTRIBUTION \
-    --dim 2 \
+    --dim 20 \
     --num_iters 200000 \
-    --var_max 4 \
+    --var_max 4.0 \
     --burn_in 1000 \
-    --hybrid_rosenbrock_n1 3 \
-    --hybrid_rosenbrock_n2 2 \
+    --hybrid_rosenbrock_n1 8 \
+    --hybrid_rosenbrock_n2 4 \
     --seed $SLURM_ARRAY_TASK_ID
 
 echo "Completed RWM GPU study for seed $SLURM_ARRAY_TASK_ID" 
