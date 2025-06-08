@@ -1,5 +1,6 @@
 {
   "target_distribution": "FullRosenbrock",
+  "proposal_distribution": "Normal",
   "dimension": 20,
   "num_iterations": 1000000,
   "seed": 2,
