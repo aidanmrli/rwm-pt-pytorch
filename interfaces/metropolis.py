@@ -18,7 +18,7 @@ class MHAlgorithm:
         self.var = var
         self.target_dist = target_dist
         
-        # MODIFIED: Check for Beta distribution to initialize within (0,1) domain
+        # iid Beta: Check for Beta distribution to initialize within (0.1, 0.9) domain
         if hasattr(target_dist, 'name') and isinstance(target_dist.name, str) and "Beta" in target_dist.name:
             # Initialize within (0.1, 0.9) to be safely away from boundaries
             initial_point = np.random.uniform(0.2, 0.8, size=dim).astype(np.float32)
@@ -27,17 +27,41 @@ class MHAlgorithm:
             # Alternative check if name is a method
             initial_point = np.random.uniform(0.2, 0.8, size=dim).astype(np.float32)
             self.chain = [initial_point]
+        
+        # iid Gamma: Check for Gamma distribution to initialize within 5 + noise domain
         elif hasattr(target_dist, 'name') and isinstance(target_dist.name, str) and "Gamma" in target_dist.name:
-            # Initialize within (0.1, 0.9) to be safely away from boundaries
             initial_point = 5 + 0.01 * np.random.randn(dim)
             self.chain = [initial_point]
         elif hasattr(target_dist, 'get_name') and callable(target_dist.get_name) and isinstance(target_dist.get_name(), str) and "Gamma" in target_dist.get_name():
-            # Alternative check if name is a method
-            # initialize with random noise around 5 for all dimensions
             initial_point = 5 + 0.01 * np.random.randn(dim)
             self.chain = [initial_point]
+        
+        # Multimodal: Check for multimodal distribution to initialize at 0
+        elif hasattr(target_dist, 'name') and isinstance(target_dist.name, str) and "RoughCarpet" in target_dist.name:
+            initial_point = np.zeros(dim)
+            self.chain = [initial_point]
+        elif hasattr(target_dist, 'get_name') and callable(target_dist.get_name) and isinstance(target_dist.get_name(), str) and "RoughCarpet" in target_dist.get_name():
+            initial_point = np.zeros(dim)
+            self.chain = [initial_point]
+        elif hasattr(target_dist, 'name') and isinstance(target_dist.name, str) and "ThreeMixture" in target_dist.name:
+            initial_point = np.zeros(dim)
+            self.chain = [initial_point]
+        elif hasattr(target_dist, 'get_name') and callable(target_dist.get_name) and isinstance(target_dist.get_name(), str) and "ThreeMixture" in target_dist.get_name():
+            initial_point = np.zeros(dim)
+            self.chain = [initial_point]
+        
+        # Hypercube: initialize within (0.1, 0.9) domain
+        elif hasattr(target_dist, 'name') and isinstance(target_dist.name, str) and "Gamma" in target_dist.name:
+            # Initialize within (0.1, 0.9) to be safely away from boundaries
+            initial_point = np.random.uniform(0.2, 0.8, size=dim).astype(np.float32)
+            self.chain = [initial_point]
+        elif hasattr(target_dist, 'get_name') and callable(target_dist.get_name) and isinstance(target_dist.get_name(), str) and "Gamma" in target_dist.get_name():
+            # Initialize within (0.1, 0.9) to be safely away from boundaries
+            initial_point = np.random.uniform(0.2, 0.8, size=dim).astype(np.float32)
+            self.chain = [initial_point]
+        
         else:
-            self.chain = [0.01 * np.random.randn(dim)]
+            self.chain = [0.00000001 * np.random.randn(dim)]
             
         self.symmetric = symmetric
         self.num_acceptances = 0    # use this to calculate acceptance rate
