@@ -1,0 +1,15 @@
+{
+  "target_distribution": "IIDBeta",
+  "dimension": 100,
+  "num_iterations": 100000,
+  "proposal_name": "Normal",
+  "proposal_config_params": {
+    "base_variance_scalar": 0.0004000000000000001
+  },
+  "seed": 42,
+  "simulation_time": 31.905561447143555,
+  "acceptance_rate": 0.50585,
+  "esjd": 0.02008182741701603,
+  "burn_in": 1000,
+  "device_used": "cuda"
+}

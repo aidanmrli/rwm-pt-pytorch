@@ -1,0 +1,15 @@
+{
+  "target_distribution": "IIDGamma",
+  "dimension": 100,
+  "num_iterations": 10000,
+  "proposal_name": "Normal",
+  "proposal_config_params": {
+    "base_variance_scalar": 0.64
+  },
+  "seed": 42,
+  "simulation_time": 2.6027095317840576,
+  "acceptance_rate": 0.0679,
+  "esjd": 4.202333450317383,
+  "burn_in": 1000,
+  "device_used": "cuda"
+}
