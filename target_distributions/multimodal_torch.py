@@ -472,10 +472,10 @@ class RoughCarpetDistributionTorch(TorchTargetDistribution):
         Compute the log probability density function at point(s) x.
         
         Args:
-            x: Tensor of shape (dim,) for single point or (batch_size, dim) for batch
+            x: Tensor of shape (dim,) for a single point or (batch_size, dim) for a batch.
             
         Returns:
-            Tensor of log densities with shape () for single point or (batch_size,) for batch
+            Tensor of log densities with shape () for a single point or (batch_size,) for a batch.
         """
         if x.device != self.device:
             x = x.to(self.device)
@@ -488,33 +488,26 @@ class RoughCarpetDistributionTorch(TorchTargetDistribution):
             x_scaled = x
             log_jacobian = 0.0
         
-        if len(x.shape) == 1:
-            # Single point: shape (dim,)
-            log_density = 0.0
-            for i in range(self.dim):
-                # Compute log density for each coordinate
-                x_i = x_scaled[i]
-                squared_diffs = (x_i - self.modes) ** 2
-                log_densities_i = -0.5 * squared_diffs - self.log_sqrt_2pi + self.log_weights
-                log_density += torch.logsumexp(log_densities_i, dim=0)
-            
-            return log_density + log_jacobian
-        else:
-            # Batch: shape (batch_size, dim)
-            batch_size = x.shape[0]
-            log_densities = torch.zeros(batch_size, device=self.device, dtype=torch.float32)
-            
-            for i in range(self.dim):
-                # Compute log density for each coordinate
-                x_i = x_scaled[:, i]  # Shape: (batch_size,)
-                x_i_expanded = x_i.unsqueeze(-1)  # Shape: (batch_size, 1)
-                modes_expanded = self.modes.unsqueeze(0)  # Shape: (1, 3)
-                
-                squared_diffs = (x_i_expanded - modes_expanded) ** 2  # Shape: (batch_size, 3)
-                log_densities_i = -0.5 * squared_diffs - self.log_sqrt_2pi + self.log_weights
-                log_densities += torch.logsumexp(log_densities_i, dim=1)
-            
-            return log_densities + log_jacobian
+        # Vectorized calculation for both single point and batch cases.
+        # x_scaled shape: (dim,) or (batch_size, dim)
+        # x_expanded shape: (dim, 1) or (batch_size, dim, 1)
+        x_expanded = x_scaled.unsqueeze(-1)
+        
+        # squared_diffs shape: (dim, 3) or (batch_size, dim, 3) via broadcasting
+        squared_diffs = (x_expanded - self.modes)**2
+        
+        # log_densities_all shape: (dim, 3) or (batch_size, dim, 3)
+        log_densities_all = -0.5 * squared_diffs - self.log_sqrt_2pi + self.log_weights
+        
+        # Sum over modes using logsumexp for numerical stability.
+        # log_densities_per_dim shape: (dim,) or (batch_size, dim)
+        log_densities_per_dim = torch.logsumexp(log_densities_all, dim=-1)
+        
+        # Sum log densities over all dimensions.
+        # log_density shape: () or (batch_size,)
+        log_density = torch.sum(log_densities_per_dim, dim=-1)
+        
+        return log_density + log_jacobian
 
     def draw_sample(self, beta=1.0):
         """Draw a sample from the distribution (CPU implementation for compatibility)."""
@@ -531,6 +524,9 @@ class RoughCarpetDistributionTorch(TorchTargetDistribution):
                 noise = torch.randn(1, device=self.device, dtype=torch.float32) / torch.sqrt(torch.tensor(beta, device=self.device))
                 sample[i] = mean_value + noise.item()
             
+            if hasattr(self, 'scaling_factors'):
+                sample = sample / self.scaling_factors
+
             return sample.cpu().numpy()
     
     def draw_samples_torch(self, n_samples, beta=1.0):
@@ -544,17 +540,28 @@ class RoughCarpetDistributionTorch(TorchTargetDistribution):
         Returns:
             Tensor of samples with shape (n_samples, dim)
         """
-        samples = torch.zeros(n_samples, self.dim, device=self.device, dtype=torch.float32)
+        # Total number of independent 1D samples to draw (n_samples for each of the dim dimensions)
+        num_total_draws = n_samples * self.dim
         
-        for i in range(self.dim):
-            # Sample mode indices for this coordinate
-            mode_indices = torch.multinomial(self.weights, n_samples, replacement=True)
-            
-            # Sample from normal distributions centered at selected modes
-            selected_modes = self.modes[mode_indices]
-            noise = torch.randn(n_samples, device=self.device, dtype=torch.float32) / torch.sqrt(torch.tensor(beta, device=self.device))
-            samples[:, i] = selected_modes + noise
+        # Sample mode indices for all samples and all dimensions at once.
+        # This creates a tensor of shape (n_samples, dim).
+        mode_indices = torch.multinomial(self.weights, num_total_draws, replacement=True).view(n_samples, self.dim)
         
+        # Select the corresponding mode centers. The result, selected_modes, will have shape (n_samples, dim).
+        selected_modes = self.modes[mode_indices]
+        
+        # Generate noise for all samples and dimensions.
+        beta_tensor = torch.tensor(beta, device=self.device, dtype=torch.float32)
+        noise = torch.randn(n_samples, self.dim, device=self.device, dtype=torch.float32) / torch.sqrt(beta_tensor)
+        
+        # Combine modes and noise to get the final samples.
+        samples = selected_modes + noise
+        
+        if hasattr(self, 'scaling_factors'):
+            # For scaled density, we sample y from the base distribution
+            # and transform back to x-space via x = y / s
+            samples = samples / self.scaling_factors.unsqueeze(0)
+
         return samples
 
     def to(self, device):
