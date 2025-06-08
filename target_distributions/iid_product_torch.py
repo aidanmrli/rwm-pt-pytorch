@@ -26,9 +26,9 @@ class IIDGammaTorch(TorchTargetDistribution):
         self.scale = torch.tensor(scale, device=self.device, dtype=torch.float32)
         
         # Pre-compute log normalization constant for single Gamma distribution
-        # log(Gamma(shape)) - shape * log(scale)
+        # log(Gamma(shape)) + shape * log(scale)
         self.log_gamma_shape = torch.lgamma(self.shape)
-        self.log_norm_const_1d = self.log_gamma_shape - self.shape * torch.log(self.scale)
+        self.log_norm_const_1d = self.log_gamma_shape + self.shape * torch.log(self.scale)
         
         # For d-dimensional product: d * log_norm_const_1d
         self.log_norm_const = dim * self.log_norm_const_1d
