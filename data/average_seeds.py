@@ -126,16 +126,31 @@ def average_experiment_data(file_paths: List[str]) -> Dict[str, Any]:
         else:
             seeds.append(None)  # File without explicit seed
     
+    # Check for inconsistent array lengths across all relevant fields
+    array_fields_to_check = [
+        'var_value_range', 
+        'expected_squared_jump_distances', 
+        'acceptance_rates', 
+        'times', 
+        'swap_acceptance_rates_range'
+    ]
+
+    for field in array_fields_to_check:
+        lengths = {}
+        # Collect lengths from all files that have this field
+        for i, data in enumerate(all_data):
+            if field in data and isinstance(data.get(field), list):
+                lengths[file_paths[i]] = len(data[field])
+        
+        # If the field was present and lengths are inconsistent, raise a detailed error
+        if lengths and len(set(lengths.values())) > 1:
+            error_msg = f"Inconsistent array lengths for field '{field}':\n"
+            for path, length in sorted(lengths.items()):
+                error_msg += f"  - {os.path.basename(path)}: length {length}\n"
+            raise ValueError(error_msg)
+    
     # Get reference data structure from first file
     reference_data = all_data[0]
-    
-    # Verify all files have compatible structure
-    for i, data in enumerate(all_data[1:], 1):
-        if len(data.get('var_value_range', [])) != len(reference_data.get('var_value_range', [])):
-            raise ValueError(f"File {file_paths[i]} has incompatible var_value_range length")
-        
-        if len(data.get('expected_squared_jump_distances', [])) != len(reference_data.get('expected_squared_jump_distances', [])):
-            raise ValueError(f"File {file_paths[i]} has incompatible expected_squared_jump_distances length")
     
     # Average scalar values
     scalar_fields = ['max_esjd', 'max_acceptance_rate', 'max_variance_value']
