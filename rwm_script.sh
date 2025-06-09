@@ -29,6 +29,9 @@ python single_run_experiment.py --target RoughCarpet --dim 20 --normal_base_vari
 python single_run_experiment.py --target RoughCarpet --dim 30 --normal_base_variance 4.7 --num_iters 100000 --burn_in 1000
 python single_run_experiment.py --target RoughCarpet --dim 50 --normal_base_variance 4.7 --num_iters 100000 --burn_in 1000
 
+python single_run_experiment.py --target ThreeMixture --dim 2 --normal_base_variance 14.0 --num_iters 200000 --burn_in 1000
+python single_run_experiment.py --target ThreeMixture --dim 5 --normal_base_variance 5.4 --num_iters 200000 --burn_in 1000
+python single_run_experiment.py --target ThreeMixture --dim 10 --normal_base_variance 4.6 --num_iters 200000 --burn_in 1000
 python single_run_experiment.py --target ThreeMixture --dim 20 --normal_base_variance 4.6 --num_iters 200000 --burn_in 1000
 python single_run_experiment.py --target ThreeMixture --dim 30 --normal_base_variance 4.6 --num_iters 200000 --burn_in 1000
 python single_run_experiment.py --target ThreeMixture --dim 50 --normal_base_variance 4.6 --num_iters 200000 --burn_in 1000
