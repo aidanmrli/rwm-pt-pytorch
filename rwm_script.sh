@@ -20,6 +20,7 @@ python single_run_experiment.py --target Hypercube --dim 10 --normal_base_varian
 python single_run_experiment.py --target Hypercube --dim 20 --normal_base_variance 1.5 --num_iters 100000 --burn_in 1000
 python single_run_experiment.py --target Hypercube --dim 30 --normal_base_variance 1.2 --num_iters 100000 --burn_in 1000
 python single_run_experiment.py --target Hypercube --dim 50 --normal_base_variance 1.0 --num_iters 100000 --burn_in 1000
+python single_run_experiment.py --target Hypercube --dim 100 --normal_base_variance 0.8 --num_iters 100000 --burn_in 1000
 
 python single_run_experiment.py --target RoughCarpet --dim 2 --normal_base_variance 24.0 --num_iters 100000 --burn_in 1000
 python single_run_experiment.py --target RoughCarpet --dim 5 --normal_base_variance 14.0 --num_iters 100000 --burn_in 1000
