@@ -3,7 +3,7 @@
 GPU-accelerated reference implementation of Random Walk Metropolis (RWM) and Parallel Tempering RWM (PT-RWM) algorithms for high-dimensional, multi-modal Bayesian inference research. The codebase contains reproducible experiments, optimized CUDA kernels, and utilities for analysing sampler efficiency via acceptance rates and expected squared jump distance (ESJD).
 
 ## Key Features
-- **CPU & GPU samplers**: Baseline NumPy implementations alongside ultra-optimized PyTorch GPU algorithms with fused kernels and batched updates.
+- **CPU & GPU samplers**: Baseline NumPy implementations alongside optimized PyTorch GPU algorithms with fused kernels and batched updates.
 - **Flexible proposals**: Drop-in `Normal`, `Laplace`, and `UniformRadius` proposal distributions with automatic temperature-aware scaling.
 - **Rich target library**: Analytic and PyTorch-native targets (rough carpet, multi-mixture, Rosenbrock, funnels, hypercubes, IID products) for benchmarking.
 - **Experiment harness**: High-level `MCMCSimulation` interfaces for generating chains, computing ESJD, plotting trace/histograms, and saving artefacts.
