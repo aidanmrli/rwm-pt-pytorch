@@ -1,39 +1,35 @@
 #!/bin/bash
 #SBATCH --job-name=bash
-#SBATCH --partition=ml
-#SBATCH --qos=ml
-#SBATCH --account=ml
+#SBATCH --partition=REPLACE_WITH_PARTITION
+#SBATCH --qos=REPLACE_WITH_QOS
+#SBATCH --account=REPLACE_WITH_ACCOUNT
+#SBATCH --nodelist=REPLACE_WITH_NODELIST
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
+#SBATCH --array=1-20
 #SBATCH --mem=20G
 #SBATCH --gres=gpu:1
-#SBATCH --nodelist=quartet[1-3,5],dgx1,sonata2,,bulbasaur,charmander,squirtle
-#SBATCH --array=1-20%10
+#SBATCH --time=00:59:00
 #SBATCH --output=logs/rwm_%j.out
 #SBATCH --error=logs/rwm_%j.err
 
-#concerto[1-3],overture,quartet[1-3,5],dgx1,sonata2,
-# Options for GPU: 
-# concerto[1-3],overture
-# quartet[1-3,5],dgx1,sonata2,bulbasaur,charmander,squirtle
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
 # Activate the environment
-. /mfs1/u/$USER/envs/rwm
+source /venv/bin/activate # CHANGE TO YOUR VENV NAME
 
-#### OPTIONS for target distribution: 
+#### Options for target distribution: 
 # MultivariateNormal, MultivariateNormalScaled
 # RoughCarpet, RoughCarpetScaled, 
 # ThreeMixture, ThreeMixtureScaled, 
 # IIDGamma, IIDBeta, Hypercube
 # FullRosenbrock, EvenRosenbrock, HybridRosenbrock
 # NealFunnel, SuperFunnel
-
 TARGET_DISTRIBUTION="RoughCarpetScaled"
 
-#### OPTIONS for proposal distribution:
+#### Options for proposal distribution:
 # Normal, Laplace, UniformRadius
 PROPOSAL_DISTRIBUTION="Normal" # Default proposal
 

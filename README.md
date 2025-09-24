@@ -1,243 +1,101 @@
-# Random Walk Metropolis Algorithms
-A high-performance, GPU-accelerated library for running high-dimensional Random Walk Metropolis algorithms across a variety of scaling and tempering conditions. Written completely in Python.
+# rwm-pt-pytorch
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+GPU-accelerated reference implementation of Random Walk Metropolis (RWM) and Parallel Tempering RWM (PT-RWM) algorithms for high-dimensional, multi-modal Bayesian inference research. The codebase contains reproducible experiments, optimized CUDA kernels, and utilities for analysing sampler efficiency via acceptance rates and expected squared jump distance (ESJD).
 
-## Overview
+## Key Features
+- **CPU & GPU samplers**: Baseline NumPy implementations alongside ultra-optimized PyTorch GPU algorithms with fused kernels and batched updates.
+- **Flexible proposals**: Drop-in `Normal`, `Laplace`, and `UniformRadius` proposal distributions with automatic temperature-aware scaling.
+- **Rich target library**: Analytic and PyTorch-native targets (rough carpet, multi-mixture, Rosenbrock, funnels, hypercubes, IID products) for benchmarking.
+- **Experiment harness**: High-level `MCMCSimulation` interfaces for generating chains, computing ESJD, plotting trace/histograms, and saving artefacts.
+- **Cluster ready**: Example Slurm batch scripts for large-scale GPU sweeps and automated plotting helpers for post-processing.
 
-This repository provides a comprehensive framework for studying optimal scaling properties of Markov Chain Monte Carlo (MCMC) algorithms, specifically Random Walk Metropolis (RWM) and Parallel Tempering Random Walk Metropolis (PT-RWM). The codebase features GPU acceleration with 10-50x performance improvements.
+## Installation
+Requires Python 3.9+.
 
-### Key Features
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install .
+```
 
-- **GPU Acceleration**: PyTorch-based GPU implementations with JIT compilation and kernel fusion
-- **RWM Algorithms in Python**: Random Walk Metropolis with and without parallel tempering
-- **Diverse Target Distributions**: Unimodal and multimodal test distributions for algorithm evaluation
-- **Rigorous Testing Framework**: Extensive correctness and performance validation
-- **Publication-Ready Visualizations**: Automated plot generation for research communication
-- **Modular Architecture**: Clean, extensible design following SOLID principles
+For editable development with tooling:
+
+```bash
+python -m pip install -e .[dev]
+```
+
+### GPU Dependencies
+The GPU implementations rely on a CUDA-enabled PyTorch build. Install the CUDA wheels that match your driver/toolkit as documented on [pytorch.org](https://pytorch.org/). The CPU implementations work with the CPU-only build.
 
 ## Quick Start
-
-### Installation
-
-Run the following in your terminal:
-
+### 1. Run a CPU experiment
 ```bash
-git clone https://github.com/aidanmrli/random-walk-metropolis.git
-cd random-walk-metropolis
-pip install -r requirements.txt
+python experiment.py
 ```
+Configurable options inside the script let you change target distributions, dimensions, and sampler parameters while automatically reporting acceptance rates and ESJD.
 
-For maximum performance, install PyTorch with GPU support. On a Linux system, running the standard command as per the [PyTorch website](https://pytorch.org/get-started/locally/) should be fine:
-
+### 2. Run GPU parallel tempering
 ```bash
-# For CUDA 12.6
-pip install torch torchvision torchaudio
+python example_pt_gpu.py
 ```
+This walks through three progressively harder scenarios and prints timing, swap acceptance, and ESJD diagnostics. The script falls back to CPU when CUDA is unavailable.
 
-### Quick Test
-
-Verify GPU acceleration is working:
-
-```bash
-python tests/quick_test.py
-```
-
-## Usage Examples
-
-### GPU-Accelerated Experiments
-
+### 3. Launch a single GPU simulation interactively
 ```python
-from interfaces import MCMCSimulation_GPU
-from algorithms import RandomWalkMH_GPU
-from target_distributions import MultivariateNormalTorch
+from algorithms import ParallelTemperingRWM_GPU_Optimized
+from target_distributions import RoughCarpetTorch
 
-# GPU-accelerated simulation
-simulation = MCMCSimulation_GPU(
+target = RoughCarpetTorch(dim=20)
+pt = ParallelTemperingRWM_GPU_Optimized(
     dim=20,
-    sigma=0.1,
-    num_iterations=100000,
-    algorithm=RandomWalkMH_GPU,
-    target_dist=MultivariateNormalTorch(20),
-    pre_allocate=True  # Enable memory optimization
+    var=0.9,
+    target_dist=target,
+    burn_in=2000,
+    pre_allocate_steps=10000,
+    swap_every=10,
+    geom_temp_spacing=True,
 )
-
-chain = simulation.generate_samples()
+samples = pt.generate_samples(10000)
+print("Swap acceptance:", pt.swap_acceptance_rate)
+print("PT ESJD:", pt.expected_squared_jump_distance_gpu())
 ```
+Switch proposal families by passing a `NormalProposal`, `LaplaceProposal`, or `UniformRadiusProposal` from `proposal_distributions`.
 
-## Experimental Scripts
+## Project Layout
+- `algorithms/` – Core CPU and GPU RWM / PT-RWM implementations plus proposal abstractions.
+- `interfaces/` – High-level simulation APIs (`MCMCSimulation`, `MCMCSimulation_GPU`, `TargetDistribution`, etc.).
+- `proposal_distributions/` – Modular proposal family implementations and utilities.
+- `target_distributions/` – Library of analytic and PyTorch-native target densities for benchmarking.
+- `data/` – Cached JSON experiment outputs used by plotting utilities.
+- `images/` – Generated figures (trace plots, histograms, ESJD curves).
+- `example_pt_gpu.py`, `experiment*.py` – Ready-to-run experiment entry points.
+- `plot.py` – Helper that turns averaged JSON logs into publication-quality figures.
+- `run_*.sbatch` – Sample Slurm scripts for HPC deployments.
+- `tests/` – Regression and performance smoke tests for GPU kernels and proposal logic.
 
-### GPU-Accelerated RWM Experiments
+## Development Workflow
+1. Install dev dependencies: `python -m pip install -e .[dev]`
+2. Run targeted checks (GPU tests require CUDA hardware):
+   ```bash
+   pytest tests/test_rwm_correctness.py
+   pytest tests/test_pt_gpu.py
+   ```
+3. Format/lint before commits:
+   ```bash
+   ruff check .
+   black .
+   ```
 
-The `experiment_RWM_GPU.py` script provides comprehensive GPU-accelerated parameter sweeps:
+## Reproducing Figures
+1. Execute experiments (CPU or GPU) to populate `data/` with JSON summaries.
+2. Generate ESJD plots with `python plot.py`, which writes PNGs into `images/averaged/`.
+3. Use `images/publishing/` artefacts for trace plots and histograms created via `MCMCSimulation` helpers.
 
-```bash
-python experiment_RWM_GPU.py --dim 20 --var_max 4.0 --target MultivariateNormal --num_iters 100000
-```
+## Citation
+If this repository informs your research, please cite the associated article:
 
-**Arguments:**
-- `--dim`: Dimension of the target distribution (default: 20)
-- `--target`: Target distribution name (default: "MultivariateNormal")
-- `--num_iters`: Number of MCMC iterations (default: 100000)
-- `--mode`: Experiment mode - "comparison", "optimization", or "benchmark"
-- `--var_max`: The maximum variance is calculated from this number by doing (var ** 2 / dim).
-- `--seed`: Random seed for reproducibility
-
-### Traditional CPU Experiments
-
-Original CPU implementations are still available:
-
-```bash
-# RWM parameter sweeps
-python experiment_RWM.py --dim 10 --var_max 3.0 --target MultivariateNormal --num_iters 200000
-
-# Parallel tempering experiments  
-python experiment_pt.py --dim 20 --swap_accept_max 0.6 --target RoughCarpet --num_iters 100000
-```
-
-## Available Target Distributions
-
-### GPU-Optimized Distributions
-- `MultivariateNormalTorch`: Standard multivariate Gaussian
-- `RoughCarpetDistributionTorch`: Multimodal rough landscape
-- `ThreeMixtureDistributionTorch`: Three-component Gaussian mixture
-- `HypercubeTorch`: Uniform distribution on hypercube
-- `IIDGammaTorch`: Product of independent Gamma distributions
-- `IIDBetaTorch`: Product of independent Beta distributions
-
-### CPU Distributions
-- `MultivariateNormal`, `RoughCarpet`, `ThreeMixture`, `Hypercube`, `IIDGamma`, `IIDBeta`
-
-## Data Processing and Analysis
-
-### Automated Seed Averaging
-
-Reduce statistical noise by averaging across multiple random seeds:
-
-```bash
-# Average results for specific configuration
-python data/average_seeds.py --target MultivariateNormal --algorithm RWM_GPU --dim 20 --iters 100000
-
-# Batch process all configurations that have multiple seeds
-python data/batch_average_seeds.py --base_dir data/ --output_dir averaged_results/
-```
-
-### Visualization
-
-Generate publication-ready plots:
-
-```bash
-# Create plots for all data files
-python plot.py
-
-# Individual simulation diagnostics
-python experiment.py  # Generates traceplots and histograms
-```
-
-## Testing and Validation
-
-### Comprehensive Test Suite
-
-```bash
-# Quick functionality verification
-python tests/quick_test.py
-
-# Detailed correctness testing
-python tests/test_rwm_correctness.py
-
-# Performance benchmarking
-python tests/test_rwm_performance_benchmark.py
-```
-
-### Test Coverage
-- **Correctness verification**: GPU implementations match CPU within 5%
-- **Statistical validation**: Empirical properties match theoretical expectations
-- **Performance benchmarking**: Speedup measurement across problem sizes
-- **Sequential dependence**: Proper MCMC autocorrelation structure
-
-## Architecture
-
-### Core Components
-
-1. **Interfaces** (`interfaces/`): Abstract base classes
-   - `MCMCSimulation` / `MCMCSimulation_GPU`: Simulation controllers
-   - `TargetDistribution`: Distribution interface
-   - `MHAlgorithm`: Metropolis-Hastings algorithm interface
-
-2. **Algorithms** (`algorithms/`): MCMC implementations
-   - `RandomWalkMH` / `RandomWalkMH_GPU`: Standard and GPU-accelerated RWM
-   - `RandomWalkMH_GPU_Optimized`: Ultra-fused GPU implementation
-   - `ParallelTemperingRWM`: Parallel tempering with adaptive ladders
-
-3. **Target Distributions** (`target_distributions/`): Test distributions
-   - CPU versions: Standard NumPy implementations
-   - GPU versions: PyTorch tensor implementations with `Torch` suffix
-
-4. **Testing** (`tests/`): Comprehensive validation suite
-   - Correctness verification, performance benchmarking, device compatibility
-
-5. **Data Processing** (`data/`): Analysis utilities
-   - Seed averaging, batch processing, result aggregation
-
-## Advanced Features
-
-### GPU Optimization Techniques
-- **JIT Compilation**: PyTorch JIT for maximum arithmetic efficiency
-- **Kernel Fusion**: Complete MCMC steps in single GPU kernels
-- **Memory Pre-allocation**: Eliminates dynamic GPU memory management
-- **Sequential Processing**: Maintains RWM theoretical correctness
-
-### Research Applications
-- **Optimal Scaling Studies**: Identify optimal acceptance rates (~0.234)
-- **ESJD Maximization**: Find proposal variances maximizing efficiency
-- **Algorithm Comparison**: Compare RWM vs PT-RWM performance
-- **Dimensional Scaling**: Study parameter scaling with problem dimension
-
-## Documentation
-
-- **`GPU_QUICKSTART.md`**: Complete guide for GPU acceleration
-- **`SUMMARY.md`**: Comprehensive project overview
-- **Inline documentation**: Extensive docstrings optimized for AI assistants
-
-## HPC Integration
-
-For high-performance computing environments:
-
-```bash
-# SLURM job submission
-sbatch run_rwm_gpu_dcs.sbatch
-
-# Manual GPU allocation
-srun -p ml -q ml -A ml -w concerto1 -c 4 --mem=2G --gres=gpu:1 --pty bash
-```
-
-## Migration from CPU to GPU
-
-### Simple Replacement
-```python
-# Before (CPU)
-from interfaces import MCMCSimulation
-from algorithms import RandomWalkMH
-from target_distributions import MultivariateNormal
-
-# After (GPU)
-from interfaces import MCMCSimulation_GPU
-from algorithms import RandomWalkMH_GPU
-from target_distributions import MultivariateNormalTorch
-```
-
-### Performance Optimization
-- Add `pre_allocate=True` for memory optimization
-- Use GPU-native target distributions (with `Torch` suffix)
-- Enable progress bars with `progress_bar=True`
-
-## Contributing
-
-This repository is designed for easy extension:
-- **Modular architecture**: Add new algorithms by inheriting from `MHAlgorithm`
-- **Plugin system**: New target distributions inherit from `TargetDistribution`
-- **Comprehensive testing**: All new features should include correctness tests
+> Aidan Li (2025). *Communications in Statistics - Simulation and Computation*. https://doi.org/10.1080/03610918.2025.2544242
 
 ## License
-
-This repository is MIT licensed. See the LICENSE file for details.
+Released under the terms of the MIT License. See `LICENSE` for details.
