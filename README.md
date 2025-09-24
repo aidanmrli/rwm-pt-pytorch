@@ -95,7 +95,7 @@ Switch proposal families by passing a `NormalProposal`, `LaplaceProposal`, or `U
 ## Citation
 If this repository informs your research, please cite the associated article:
 
-```bash
+```
 @article{li2025exploring,
    author = {Aidan Li and Liyan Wang and Tianye Dou and Jeffrey S. Rosenthal},
    title = {Exploring the generalizability of the optimal 0.234 acceptance rate in random-walk metropolis and parallel tempering algorithms},
