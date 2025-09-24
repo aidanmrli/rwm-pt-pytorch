@@ -95,7 +95,25 @@ Switch proposal families by passing a `NormalProposal`, `LaplaceProposal`, or `U
 ## Citation
 If this repository informs your research, please cite the associated article:
 
-> Aidan Li (2025). *Communications in Statistics - Simulation and Computation*. https://doi.org/10.1080/03610918.2025.2544242
+```bash
+@article{li2025exploring,
+   author = {Aidan Li and Liyan Wang and Tianye Dou and Jeffrey S. Rosenthal},
+   title = {Exploring the generalizability of the optimal 0.234 acceptance rate in random-walk metropolis and parallel tempering algorithms},
+   journal = {Communications in Statistics - Simulation and Computation},
+   volume = {0},
+   number = {0},
+   pages = {1--31},
+   year = {2025},
+   publisher = {Taylor \& Francis},
+   doi = {10.1080/03610918.2025.2544242},
+   URL = { 
+         https://doi.org/10.1080/03610918.2025.2544242
+   },
+   eprint = { 
+         https://doi.org/10.1080/03610918.2025.2544242
+   }
+}
+```
 
 ## License
 Released under the terms of the MIT License. See `LICENSE` for details.
